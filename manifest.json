@@ -33,7 +33,19 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content.js"]
+      "js": [
+        "content/extractors/twitter.js",
+        "content/extractors/danbooru.js",
+        "content/extractors/gelbooru.js",
+        "content/extractors/extractors.js",
+        "content/ui/styles.js",
+        "content/ui/toast.js",
+        "content/ui/tagPills.js",
+        "content/ui/imageSelector.js",
+        "content/ui/overlay.js",
+        "content/ui/ui.js",
+        "content.js"
+      ]
     }
   ],
   "options_ui": {
