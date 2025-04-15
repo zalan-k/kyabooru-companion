@@ -11,6 +11,30 @@ let isOverlayOpen = false;
 const Extractors = window.TagSaver.Extractors;
 const UI = window.TagSaver.UI;
 
+// Ensure modules load in the correct order
+document.addEventListener('DOMContentLoaded', function() {
+  // Verify all components are loaded
+  if (!window.TagSaver || 
+      !window.TagSaver.UI || 
+      !window.TagSaver.UI.Overlay ||
+      !window.TagSaver.UI.Overlay.createOverlay) {
+    
+    console.error("Components not properly loaded! Fallback to monolithic mode...");
+    
+    // If modules didn't load, fallback to direct initialization
+    window.TagSaver = window.TagSaver || {};
+    window.TagSaver.UI = window.TagSaver.UI || {};
+    
+    // Fix critical components by directly loading from inline definitions
+    if (!window.TagSaver.UI.Overlay || !window.TagSaver.UI.Overlay.createOverlay) {
+      console.log("Initializing overlay component directly");
+      // The overlay module will be initialized when needed
+    }
+  } else {
+    console.log("All components loaded successfully");
+  }
+});
+
 // Extract tags and images based on the current website
 function extractPageContent() {
   currentPageUrl = window.location.href;
@@ -35,34 +59,61 @@ function checkIfSupportedSite(url) {
 
 // Initialize the extension
 function init() {
+  console.log("Initializing extension...");
+  
+  // Ensure UI components are available
+  if (!window.TagSaver || !window.TagSaver.UI) {
+    console.error("UI namespace not found - initialization failed!");
+    return;
+  }
+  
   // Initialize UI components
-  UI.initUI();
+  if (window.TagSaver.UI.initUI) {
+    console.log("Initializing UI components...");
+    window.TagSaver.UI.initUI();
+  } else {
+    console.error("UI.initUI method not found!");
+  }
+  
+  // Verify critical components are available
+  if (!window.TagSaver.UI.Overlay || !window.TagSaver.UI.Overlay.createOverlay) {
+    console.error("Overlay component not properly initialized!");
+  }
+  
+  if (!window.TagSaver.UI.ImageSelector || !window.TagSaver.UI.ImageSelector.startImageSelectionMode) {
+    console.error("ImageSelector component not properly initialized!");
+  }
   
   // Add keyboard shortcut for Ctrl+Shift+U directly
   document.addEventListener('keydown', (e) => {
     if (e.ctrlKey && e.shiftKey && e.key === 'U') {
+      console.log("Ctrl+Shift+U detected, handling overlay...");
       handleSmartOverlay();
     }
   });
+  
+  console.log("Extension initialization complete!");
 }
 
 // Handle smart overlay logic
 function handleSmartOverlay() {
+  
   // Get current site info
   const url = window.location.href;
   const isSupportedSite = checkIfSupportedSite(url);
+  let wasOverlayOpen = false;
   
   // Case 1: Overlay is already open - close it
   if (isOverlayOpen) {
     UI.Overlay.closeOverlay();
     isOverlayOpen = false;
-    return;
+    wasOverlayOpen = true; // Track that we just closed an overlay
+    UI.Overlay.hideImagePreview();
   }
   
   // Case 2: First activation on supported site - show overlay with tags
-  if (isSupportedSite && !overlayActivatedOnce) {
+  if (isSupportedSite && !overlayActivatedOnce && !wasOverlayOpen) {
     overlayActivatedOnce = true;
-    isOverlayOpen = true;
     showContentOverlay();
     return;
   }
@@ -70,8 +121,10 @@ function handleSmartOverlay() {
   // Case 3: Second activation on supported site OR any activation on unsupported site
   // - Show image selection mode
   overlayActivatedOnce = true;
+  currentImageUrl = null;
   startImageSelection();
 }
+
 
 // Show content overlay with extracted content
 function showContentOverlay() {
@@ -79,11 +132,15 @@ function showContentOverlay() {
   currentPageUrl = window.location.href;
   
   // Extract content from the page
-  const extractedContent = extractPageContent();
+  let extractedContent = { tags: [], imageUrl: null };
+  if (checkIfSupportedSite(currentPageUrl)) {
+    extractedContent = extractPageContent();
+  }
   
   // If we have a selected image from the image selector, use that
   // Otherwise use the extracted image
   const imageToShow = currentImageUrl || extractedContent.imageUrl;
+  currentTags = extractedContent.tags; // Only populated for supported sites
   
   // Create and show the overlay
   isOverlayOpen = true;
@@ -102,10 +159,11 @@ function showContentOverlay() {
 // Start image selection
 function startImageSelection() {
   UI.ImageSelector.startImageSelectionMode((selectedImageUrl) => {
-    // Store the selected image
     currentImageUrl = selectedImageUrl;
-    
-    // Show the tag input overlay
+    // Explicitly avoid extracting content for unsupported sites
+    if (!checkIfSupportedSite(window.location.href)) {
+      currentTags = []; // Reset tags for manual input
+    }
     isOverlayOpen = true;
     showContentOverlay();
   });

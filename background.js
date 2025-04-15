@@ -224,7 +224,14 @@ browser.contextMenus.onClicked.addListener((info, tab) => {
 
 // Open overlay via hotkey or icon click
 browser.commands.onCommand.addListener((command) => {
-  if (command === "open-overlay") showContentOverlay();
+  if (command === "open-overlay") {
+    // Send explicit message to trigger the smart overlay
+    browser.tabs.query({active: true, currentWindow: true}).then(tabs => {
+      browser.tabs.sendMessage(tabs[0].id, {
+        action: "smart-overlay-shortcut"
+      });
+    });
+  }
 });
 
 browser.action.onClicked.addListener(() => {

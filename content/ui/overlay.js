@@ -72,12 +72,24 @@ window.TagSaver.UI.Overlay = (function() {
     
     // Create floating image preview if we have an image
     if (imageUrl) {
-      console.log("Creating image preview for:", imageUrl);
       const imagePreview = document.createElement('div');
       imagePreview.className = 'ts-floating-image-preview';
       imagePreview.innerHTML = `<img src="${imageUrl}" alt="Image to be saved">`;
+      imagePreview.style.opacity = '0'; // Start hidden
       document.body.appendChild(imagePreview);
       imagePreviewElement = imagePreview;
+      const img = imagePreview.querySelector('img');
+      img.onload = () => {
+        requestAnimationFrame(() => {
+          const overlayContent = document.querySelector('.overlay-content');
+          if (overlayContent) {
+            const overlayRect = overlayContent.getBoundingClientRect();
+            imagePreviewElement.style.bottom = `${window.innerHeight - overlayRect.top + 10}px`;
+            imagePreviewElement.style.left = `${overlayRect.left + (overlayRect.width/2) - (imagePreview.offsetWidth/2)}px`;
+            imagePreviewElement.style.opacity = '1'; // Fade in after positioning
+          }
+        });
+      };
     }
 
     overlay.innerHTML = `
