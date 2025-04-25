@@ -21,6 +21,13 @@ function initDB() {
       store.createIndex('url', 'url', { unique: false });
       store.createIndex('tags', 'tags', { unique: false, multiEntry: true });
       store.createIndex('timestamp', 'timestamp', { unique: false });
+
+      // Add a new index specifically for autocomplete
+      store.createIndex('tagText', 'tagText', { unique: false, multiEntry: true });
+      
+      // Add pool-related indexes
+      store.createIndex('poolId', 'poolId', { unique: false });
+      store.createIndex('poolIndex', ['poolId', 'poolIndex'], { unique: false });
     }
   };
   
@@ -51,6 +58,16 @@ async function loadSettings() {
 
 // Save data to IndexedDB
 async function saveToDatabase(data) {
+  // Process tags for better search
+  const tagTexts = data.tags.map(tag => {
+    // Store both the full tag and the name part for better searching
+    if (tag.includes(':')) {
+      const [category, name] = tag.split(':', 2);
+      return [tag.toLowerCase(), name.toLowerCase()]; // Store both forms
+    }
+    return [tag.toLowerCase()];
+  }).flat();
+  
   return new Promise((resolve, reject) => {
     try {
       const transaction = db.transaction([TAG_STORE], 'readwrite');
@@ -59,8 +76,11 @@ async function saveToDatabase(data) {
       const request = store.add({
         url: data.url,
         tags: data.tags,
+        tagText: tagTexts, // Add this new field for searching
         imageUrl: data.imageUrl,
-        timestamp: data.timestamp
+        timestamp: data.timestamp,
+        // Add pool hash if provided
+        poolHash: data.poolHash || null
       });
       
       request.onsuccess = () => resolve(true);
@@ -84,6 +104,41 @@ async function downloadImage(imageUrl, filename) {
     console.error("Error downloading image:", error);
     return false;
   }
+}
+
+function searchTags(prefix) {
+  return new Promise((resolve, reject) => {
+    try {
+      const transaction = db.transaction([TAG_STORE], 'readonly');
+      const store = transaction.objectStore(TAG_STORE);
+      // Use any appropriate index
+      const request = store.getAll();
+      
+      request.onsuccess = () => {
+        // Extract tags as strings from whatever structure you have
+        const tagStrings = [];
+        request.result.forEach(record => {
+          // Make sure to only include string tags
+          if (record.tags && Array.isArray(record.tags)) {
+            record.tags.forEach(tag => {
+              if (typeof tag === 'string' && 
+                  tag.toLowerCase().includes(prefix.toLowerCase())) {
+                tagStrings.push(tag);
+              }
+            });
+          }
+        });
+        
+        // Return unique tags only
+        const uniqueTags = [...new Set(tagStrings)];
+        resolve(uniqueTags.slice(0, 30));
+      };
+      
+      request.onerror = (event) => reject(event.target.error);
+    } catch (error) {
+      reject(error);
+    }
+  });
 }
 
 // Save JSON data
@@ -148,12 +203,20 @@ async function handleSaveData(data) {
       }
     });
     
+    if (data.poolId && data.poolIndex !== undefined) {
+      await checkAndHandlePoolIndexConflict(data.poolId, data.poolIndex);
+    }
+
     // Prepare data for database with categorized tags
     const dbData = {
       url: data.url,
       tags: data.tags, // Keep original format for database storage
       imageUrl: data.imageUrl,
-      timestamp: data.timestamp
+      timestamp: data.timestamp,
+      ...(data.poolId && { 
+        poolId: data.poolId,
+        poolIndex: parseInt(data.poolIndex, 10) || 0
+      })
     };
     
     // Save to database
@@ -172,7 +235,11 @@ async function handleSaveData(data) {
       sourceUrl: data.url,
       tags: categorizedTags, // Use the categorized format for JSON export
       imageUrl: data.imageUrl,
-      timestamp: data.timestamp
+      timestamp: data.timestamp,
+      ...(data.poolId && {
+        poolId: data.poolId,
+        poolIndex: parseInt(data.poolIndex, 10) || 0
+      })
     };
     
     const jsonSuccess = await saveJSON(jsonData, `${baseFilename}.json`);
@@ -188,6 +255,51 @@ async function handleSaveData(data) {
   }
 }
 
+async function checkAndHandlePoolIndexConflict(poolId, index) {
+  return new Promise((resolve, reject) => {
+    try {
+      const transaction = db.transaction([TAG_STORE], 'readwrite');
+      const store = transaction.objectStore(TAG_STORE);
+      const poolIndexIndex = store.index('poolIndex');
+      
+      // Get all entries with the same pool ID
+      const request = poolIndexIndex.getAll([poolId, parseInt(index, 10)]);
+      
+      request.onsuccess = async () => {
+        // If index already exists, shift all indices at and above this one
+        if (request.result.length > 0) {
+          // Get all entries in this pool
+          const allPoolRequest = store.index('poolId').getAll(poolId);
+          
+          allPoolRequest.onsuccess = () => {
+            // Filter entries with index >= the requested index, sort in descending order
+            const entriesToUpdate = allPoolRequest.result
+              .filter(entry => entry.poolIndex >= parseInt(index, 10))
+              .sort((a, b) => b.poolIndex - a.poolIndex);
+            
+            // Increment each index
+            entriesToUpdate.forEach(entry => {
+              entry.poolIndex += 1;
+              store.put(entry);
+            });
+            
+            transaction.oncomplete = () => resolve();
+            transaction.onerror = (e) => reject(e.target.error);
+          };
+          
+          allPoolRequest.onerror = (e) => reject(e.target.error);
+        } else {
+          resolve(); // No conflict
+        }
+      };
+      
+      request.onerror = (e) => reject(e.target.error);
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
 function setupContextMenu() {
   browser.contextMenus.create({
     id: "select-image-mode",
@@ -199,6 +311,39 @@ function setupContextMenu() {
     id: "save-specific-image",
     title: "Save this Image with Tags",
     contexts: ["image"]
+  });
+}
+
+async function getPoolHighestIndex(poolId) {
+  return new Promise((resolve, reject) => {
+    try {
+      if (!db) {
+        return reject(new Error("Database not initialized"));
+      }
+      
+      const transaction = db.transaction([TAG_STORE], 'readonly');
+      const store = transaction.objectStore(TAG_STORE);
+      const poolIdIndex = store.index('poolId');
+      
+      const request = poolIdIndex.getAll(poolId);
+      
+      request.onsuccess = () => {
+        if (request.result.length === 0) {
+          // No entries for this pool
+          resolve(null);
+        } else {
+          // Find highest index
+          const highestIndex = Math.max(...request.result.map(entry => 
+            entry.poolIndex !== undefined ? entry.poolIndex : 0
+          ));
+          resolve(highestIndex);
+        }
+      };
+      
+      request.onerror = (event) => reject(event.target.error);
+    } catch (error) {
+      reject(error);
+    }
   });
 }
 
@@ -261,6 +406,24 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     handleSaveData(message.data)
       .then(result => sendResponse(result))
       .catch(error => sendResponse({ success: false, error: error.message }));
+    return true; // Required for async sendResponse
+  }
+  else if (message.action === "search-tags") {
+    searchTags(message.query)
+      .then(results => sendResponse(results))
+      .catch(error => {
+        console.error("Error searching tags:", error);
+        sendResponse([]);
+      });
+    return true; // Required for async sendResponse
+  }
+  else if (message.action === "get-pool-highest-index") {
+    getPoolHighestIndex(message.poolId)
+      .then(index => sendResponse({ success: true, highestIndex: index }))
+      .catch(error => {
+        console.error("Error getting pool index:", error);
+        sendResponse({ success: false, error: error.message });
+      });
     return true; // Required for async sendResponse
   }
 });

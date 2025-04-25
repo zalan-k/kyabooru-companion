@@ -380,7 +380,63 @@ function removeStyles(styleElement) {
       margin-left: 8px;
     }
   `;
+
+  const poolStyles = `
+  .pool-container {
+    margin-top: 15px;
+    padding: 10px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+  }
   
+  .pool-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  
+  .pool-button {
+    background: rgba(100, 100, 255, 0.3);
+    border: 1px solid rgba(100, 100, 255, 0.5);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  
+  .pool-button:hover:not(:disabled) {
+    background: rgba(100, 100, 255, 0.5);
+  }
+  
+  .pool-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  
+  .pool-fields {
+    display: grid;
+    gap: 10px;
+  }
+  
+  .pool-field-row {
+    display: grid;
+    grid-template-columns: 80px 1fr;
+    align-items: center;
+    gap: 10px;
+  }
+  
+  .pool-field-row input {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: white;
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+`;
+
   /**
    * Get all combined styles for the extension
    * @returns {string} - Combined CSS string
@@ -393,6 +449,7 @@ function removeStyles(styleElement) {
       ${imageSelectorStyles}
       ${toastStyles}
       ${autocompleteStyles}
+      ${poolStyles}
     `;
   }
   

@@ -7,39 +7,41 @@ let currentPageUrl = null;
 let overlayActivatedOnce = false;
 let isOverlayOpen = false;
 
-// Namespace shortcuts for better readability
-const Extractors = window.TagSaver.Extractors;
-const UI = window.TagSaver.UI;
+// Initialize the extension
+function init() {
+  // Ensure all namespaces exist
+  window.TagSaver = window.TagSaver || {};
+  window.TagSaver.UI = window.TagSaver.UI || {};
+  window.TagSaver.Extractors = window.TagSaver.Extractors || {};
+  
+  // Initialize UI components in correct order
+  if (window.TagSaver.UI.Styles)                                                              window.TagSaver.UI.Styles.injectStyles(window.TagSaver.UI.Styles.getAllStyles());
+  if (window.TagSaver.UI.Toast && window.TagSaver.UI.Toast.initToast)                         window.TagSaver.UI.Toast.initToast();
+  if (window.TagSaver.UI.TagPills && window.TagSaver.UI.TagPills.initTagPills)                window.TagSaver.UI.TagPills.initTagPills();
+  if (window.TagSaver.UI.ImageSelector && window.TagSaver.UI.ImageSelector.initImageSelector) window.TagSaver.UI.ImageSelector.initImageSelector();
+  if (window.TagSaver.UI.Overlay && window.TagSaver.UI.Overlay.initOverlay)                   window.TagSaver.UI.Overlay.initOverlay();
+  
+  // Add keyboard shortcut after all components are ready
+  document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.shiftKey && e.key === 'U') handleSmartOverlay();
+  });    
+  
+  // Console log
+  console.log("Extension initialization complete.");
+}
 
-// Ensure modules load in the correct order
-document.addEventListener('DOMContentLoaded', function() {
-  // Verify all components are loaded
-  if (!window.TagSaver || 
-      !window.TagSaver.UI || 
-      !window.TagSaver.UI.Overlay ||
-      !window.TagSaver.UI.Overlay.createOverlay) {
-    
-    console.error("Components not properly loaded! Fallback to monolithic mode...");
-    
-    // If modules didn't load, fallback to direct initialization
-    window.TagSaver = window.TagSaver || {};
-    window.TagSaver.UI = window.TagSaver.UI || {};
-    
-    // Fix critical components by directly loading from inline definitions
-    if (!window.TagSaver.UI.Overlay || !window.TagSaver.UI.Overlay.createOverlay) {
-      console.log("Initializing overlay component directly");
-      // The overlay module will be initialized when needed
-    }
-  } else {
-    console.log("All components loaded successfully");
-  }
-});
+// Namespace shortcuts for better readability
+function getNamespaces() {
+  return {
+    Extractors: window.TagSaver.Extractors,
+    UI: window.TagSaver.UI
+  };
+}
 
 // Extract tags and images based on the current website
 function extractPageContent() {
+  const { Extractors } = getNamespaces();
   currentPageUrl = window.location.href;
-  
-  // Use the extractors to get content
   const extractedContent = Extractors.extractPageContent(currentPageUrl);
   
   // Update global variables
@@ -48,55 +50,18 @@ function extractPageContent() {
   
   console.log("Extracted tags:", currentTags);
   console.log("Extracted image URL:", currentImageUrl);
-  
   return extractedContent;
 }
 
 // Check if the current site is supported for auto-extraction
 function checkIfSupportedSite(url) {
+  const { Extractors } = getNamespaces();
   return Extractors.isSupportedSite(url);
-}
-
-// Initialize the extension
-function init() {
-  console.log("Initializing extension...");
-  
-  // Ensure UI components are available
-  if (!window.TagSaver || !window.TagSaver.UI) {
-    console.error("UI namespace not found - initialization failed!");
-    return;
-  }
-  
-  // Initialize UI components
-  if (window.TagSaver.UI.initUI) {
-    console.log("Initializing UI components...");
-    window.TagSaver.UI.initUI();
-  } else {
-    console.error("UI.initUI method not found!");
-  }
-  
-  // Verify critical components are available
-  if (!window.TagSaver.UI.Overlay || !window.TagSaver.UI.Overlay.createOverlay) {
-    console.error("Overlay component not properly initialized!");
-  }
-  
-  if (!window.TagSaver.UI.ImageSelector || !window.TagSaver.UI.ImageSelector.startImageSelectionMode) {
-    console.error("ImageSelector component not properly initialized!");
-  }
-  
-  // Add keyboard shortcut for Ctrl+Shift+U directly
-  document.addEventListener('keydown', (e) => {
-    if (e.ctrlKey && e.shiftKey && e.key === 'U') {
-      console.log("Ctrl+Shift+U detected, handling overlay...");
-      handleSmartOverlay();
-    }
-  });
-  
-  console.log("Extension initialization complete!");
 }
 
 // Handle smart overlay logic
 function handleSmartOverlay() {
+  const { UI } = getNamespaces();
   
   // Get current site info
   const url = window.location.href;
@@ -125,9 +90,9 @@ function handleSmartOverlay() {
   startImageSelection();
 }
 
-
-// Show content overlay with extracted content
 function showContentOverlay() {
+  const { UI } = getNamespaces();
+  
   // Get current page URL
   currentPageUrl = window.location.href;
   
@@ -158,6 +123,8 @@ function showContentOverlay() {
 
 // Start image selection
 function startImageSelection() {
+  const { UI } = getNamespaces();
+  
   UI.ImageSelector.startImageSelectionMode((selectedImageUrl) => {
     currentImageUrl = selectedImageUrl;
     // Explicitly avoid extracting content for unsupported sites
@@ -169,8 +136,9 @@ function startImageSelection() {
   });
 }
 
-// Handle saving data
-function handleSave(tags) {
+function handleSave(tags, poolData = null) {
+  const { UI } = getNamespaces();
+  
   // Send data to background script for saving
   browser.runtime.sendMessage({
     action: "save-data",
@@ -178,7 +146,12 @@ function handleSave(tags) {
       url: currentPageUrl,
       tags: tags,
       imageUrl: currentImageUrl,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      // Add pool data if provided
+      ...(poolData && { 
+        poolId: poolData.poolId,
+        poolIndex: poolData.poolIndex
+      })
     }
   }).then(response => {
     if (response && response.success) {
@@ -216,5 +189,8 @@ browser.runtime.onMessage.addListener((message) => {
   }
 });
 
-// Initialize when page loads
-init();
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
