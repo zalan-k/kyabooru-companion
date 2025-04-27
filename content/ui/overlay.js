@@ -54,6 +54,7 @@ function createOverlay(options = {}) {
   // Extract options
   const {
     imageUrl = null,
+    mediaType = 'image',
     tags = [],
     pageUrl = window.location.href,
     onSave = () => {},
@@ -71,7 +72,28 @@ function createOverlay(options = {}) {
   if (imageUrl) {
     const imagePreview = document.createElement('div');
     imagePreview.className = 'ts-floating-image-preview';
-    imagePreview.innerHTML = `<img src="${imageUrl}" alt="Image to be saved">`;
+    
+    if (mediaType === 'video') {
+      // Video placeholder
+      imagePreview.innerHTML = `
+        <div class="media-placeholder video-placeholder">
+          <div class="media-icon">🎬</div>
+          <div class="media-text">Video</div>
+        </div>
+      `;
+    } else if (mediaType === 'gif') {
+      // GIF placeholder
+      imagePreview.innerHTML = `
+        <div class="media-placeholder gif-placeholder">
+          <div class="media-icon">GIF</div>
+          <div class="media-text">Animated Image</div>
+        </div>
+      `;
+    } else {
+      // Regular image
+      imagePreview.innerHTML = `<img src="${imageUrl}" alt="Image to be saved">`;
+    }
+
     imagePreview.style.opacity = '0'; // Start hidden
     document.body.appendChild(imagePreview);
     imagePreviewElement = imagePreview;
@@ -240,6 +262,44 @@ function createOverlay(options = {}) {
     onSave(displayTags, poolData);
   }
   
+  function showDuplicateWarning(originalRecord, exactMatch) {
+    const warningContainer = document.createElement('div');
+    warningContainer.className = 'duplicate-warning';
+    
+    const warningMessage = exactMatch ? 
+      'This image appears to be an exact duplicate of one you already saved!' :
+      'This image appears to be very similar to one you already saved!';
+    
+    const warningDate = new Date(originalRecord.timestamp).toLocaleString();
+    
+    warningContainer.innerHTML = `
+      <div class="warning-icon">⚠️</div>
+      <div class="warning-message">
+        <strong>${warningMessage}</strong>
+        <p>Previously saved on ${warningDate}</p>
+        <div class="warning-tags">
+          Tags: ${originalRecord.tags.slice(0, 5).join(', ')}${originalRecord.tags.length > 5 ? '...' : ''}
+        </div>
+      </div>
+      <div class="warning-actions">
+        <button class="warning-action save-anyway">Save Anyway</button>
+        <button class="warning-action cancel">Cancel</button>
+      </div>
+    `;
+    
+    overlayElement.querySelector('.overlay-content').prepend(warningContainer);
+    
+    // Add event listeners
+    warningContainer.querySelector('.save-anyway').addEventListener('click', () => {
+      warningContainer.remove();
+    });
+    
+    warningContainer.querySelector('.cancel').addEventListener('click', () => {
+      closeOverlay();
+      if (onCancel) onCancel();
+    });
+  }
+
   // Handle autocomplete suggestions
   function updateAutocompleteSuggestions() {
     const query = input.value.trim();

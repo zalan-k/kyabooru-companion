@@ -14,7 +14,8 @@
     "scripts": ["background.js"]
   },
   "action": {
-    "default_title": "Save Tags & Images",
+    "default_title": "Tag Saver",
+    "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png",
@@ -41,11 +42,14 @@
         "content/ui/imageSelector.js",
         "content/ui/overlay.js",
         "content/ui/ui.js",
+        "content/ui/highlightmanager.js",
         
         "content/extractors/twitter.js",
         "content/extractors/danbooru.js",
         "content/extractors/gelbooru.js",
         "content/extractors/extractors.js",
+
+        "content/utils/hash.js",
 
         "content.js"
       ]

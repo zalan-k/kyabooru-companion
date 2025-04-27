@@ -186,8 +186,8 @@ function removeStyles(styleElement) {
     .ts-floating-image-preview {
       position: fixed;
       z-index: 999999995;
-      max-width: 300px;
-      max-height: 300px;
+      max-width: 270px;
+      max-height: 270px;
       overflow: hidden;
       border-radius: 8px;
       background: rgba(0, 0, 0, 0.7);
@@ -200,12 +200,99 @@ function removeStyles(styleElement) {
     
     .ts-floating-image-preview img {
       max-width: 100%;
-      max-height: 280px;
+      max-height: 250px;
       object-fit: contain;
       border-radius: 6px;
     }
   `;
   
+  const duplicateWarningStyles = `
+  .duplicate-warning {
+    margin-bottom: 15px;
+    padding: 12px;
+    background: rgba(255, 87, 34, 0.2);
+    border-left: 4px solid #ff5722;
+    border-radius: 4px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  
+  .warning-icon {
+    font-size: 24px;
+  }
+  
+  .warning-message {
+    flex: 1;
+  }
+  
+  .warning-tags {
+    margin-top: 8px;
+    font-size: 12px;
+    opacity: 0.8;
+  }
+  
+  .warning-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  
+  .warning-action {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  
+  .warning-action.save-anyway {
+    background: rgba(255, 87, 34, 0.7);
+    border-color: transparent;
+  }
+  
+  .warning-action:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+  
+  .warning-action.save-anyway:hover {
+    background: rgba(255, 87, 34, 0.9);
+  }
+`;
+
+  const mediaPlaceholderStyles = `
+  .media-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 200px;
+    height: 150px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 6px;
+    color: white;
+  }
+
+  .media-icon {
+    font-size: 32px;
+    margin-bottom: 10px;
+  }
+
+  .media-text {
+    font-size: 14px;
+  }
+
+  .video-placeholder {
+    background: linear-gradient(135deg, #3498db, #2c3e50);
+  }
+
+  .gif-placeholder {
+    background: linear-gradient(135deg, #9b59b6, #2c3e50);
+  }
+`;
+
   /**
    * Image selection styles
    */
@@ -450,6 +537,8 @@ function removeStyles(styleElement) {
       ${toastStyles}
       ${autocompleteStyles}
       ${poolStyles}
+      ${duplicateWarningStyles}
+      ${mediaPlaceholderStyles}
     `;
   }
   

@@ -5,7 +5,9 @@ function saveOptions(e) {
     const settings = {
       saveFolder: document.getElementById('saveFolder').value.trim(),
       autoDetect: document.getElementById('autoDetect').checked,
-      notificationsEnabled: document.getElementById('notificationsEnabled').checked
+      notificationsEnabled: document.getElementById('notificationsEnabled').checked,
+      duplicateDetection: document.getElementById('duplicateDetection').checked,
+      similarityThreshold: parseInt(document.getElementById('similarityThreshold').value)
     };
     
     browser.storage.local.set({
@@ -33,7 +35,9 @@ function saveOptions(e) {
     const defaultSettings = {
       saveFolder: 'TagSaver',
       autoDetect: true,
-      notificationsEnabled: true
+      notificationsEnabled: true,
+      duplicateDetection: true,
+      similarityThreshold: 10
     };
     
     browser.storage.local.get('settings').then((result) => {
@@ -42,6 +46,12 @@ function saveOptions(e) {
       document.getElementById('saveFolder').value = settings.saveFolder || defaultSettings.saveFolder;
       document.getElementById('autoDetect').checked = settings.autoDetect !== undefined ? settings.autoDetect : defaultSettings.autoDetect;
       document.getElementById('notificationsEnabled').checked = settings.notificationsEnabled !== undefined ? settings.notificationsEnabled : defaultSettings.notificationsEnabled;
+      document.getElementById('duplicateDetection').checked = settings.duplicateDetection !== undefined ? settings.duplicateDetection : defaultSettings.duplicateDetection;
+      document.getElementById('similarityThreshold').value = settings.similarityThreshold !== undefined ? settings.similarityThreshold : defaultSettings.similarityThreshold;
+      document.getElementById('thresholdValue').textContent = document.getElementById('similarityThreshold').value;
+      document.getElementById('similarityThreshold').addEventListener('input', function() {
+        document.getElementById('thresholdValue').textContent = this.value;
+      });
     }).catch((error) => {
       console.error('Error loading settings:', error);
     });

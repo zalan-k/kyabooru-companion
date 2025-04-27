@@ -13,14 +13,28 @@ function init() {
   window.TagSaver = window.TagSaver || {};
   window.TagSaver.UI = window.TagSaver.UI || {};
   window.TagSaver.Extractors = window.TagSaver.Extractors || {};
+  window.TagSaver.Hash = window.TagSaver.Hash || {};
   
   // Initialize UI components in correct order
-  if (window.TagSaver.UI.Styles)                                                              window.TagSaver.UI.Styles.injectStyles(window.TagSaver.UI.Styles.getAllStyles());
-  if (window.TagSaver.UI.Toast && window.TagSaver.UI.Toast.initToast)                         window.TagSaver.UI.Toast.initToast();
-  if (window.TagSaver.UI.TagPills && window.TagSaver.UI.TagPills.initTagPills)                window.TagSaver.UI.TagPills.initTagPills();
+  if (window.TagSaver.UI.Styles)                                                             window.TagSaver.UI.Styles.injectStyles(window.TagSaver.UI.Styles.getAllStyles());
+  if (window.TagSaver.UI.Toast && window.TagSaver.UI.Toast.initToast)                        window.TagSaver.UI.Toast.initToast();
+  if (window.TagSaver.UI.TagPills && window.TagSaver.UI.TagPills.initTagPills)               window.TagSaver.UI.TagPills.initTagPills();
   if (window.TagSaver.UI.ImageSelector && window.TagSaver.UI.ImageSelector.initImageSelector) window.TagSaver.UI.ImageSelector.initImageSelector();
-  if (window.TagSaver.UI.Overlay && window.TagSaver.UI.Overlay.initOverlay)                   window.TagSaver.UI.Overlay.initOverlay();
+  if (window.TagSaver.UI.Overlay && window.TagSaver.UI.Overlay.initOverlay)                  window.TagSaver.UI.Overlay.initOverlay();
+  if (window.TagSaver.UI.HighlightManager && window.TagSaver.UI.HighlightManager.initHighlightManager) window.TagSaver.UI.HighlightManager.initHighlightManager();
   
+  // Load settings and set up highlight manager if enabled
+  browser.storage.local.get('settings').then((result) => {
+    const settings = result.settings || {};
+    
+    if (settings.duplicateDetection) {
+      // Start monitoring for saved images if enabled
+      if (window.TagSaver.UI.HighlightManager) {
+        window.TagSaver.UI.HighlightManager.startMonitoring();
+      }
+    }
+  });
+
   // Add keyboard shortcut after all components are ready
   document.addEventListener('keydown', (e) => {
     if (e.ctrlKey && e.shiftKey && e.key === 'U') handleSmartOverlay();
@@ -86,7 +100,6 @@ function handleSmartOverlay() {
   // Case 3: Second activation on supported site OR any activation on unsupported site
   // - Show image selection mode
   overlayActivatedOnce = true;
-  currentImageUrl = null;
   startImageSelection();
 }
 
@@ -97,20 +110,35 @@ function showContentOverlay() {
   currentPageUrl = window.location.href;
   
   // Extract content from the page
-  let extractedContent = { tags: [], imageUrl: null };
-  if (checkIfSupportedSite(currentPageUrl)) {
+  let extractedContent = { tags: [], imageUrl: null, mediaType: 'image' };
+  if (!currentImageUrl && checkIfSupportedSite(currentPageUrl)) {
     extractedContent = extractPageContent();
   }
   
   // If we have a selected image from the image selector, use that
   // Otherwise use the extracted image
   const imageToShow = currentImageUrl || extractedContent.imageUrl;
-  currentTags = extractedContent.tags; // Only populated for supported sites
   
-  // Create and show the overlay
+  // Determine media type
+  let mediaType = 'image';
+  if (imageToShow) {
+    if (imageToShow.endsWith('.gif') || imageToShow.includes('.gif?')) {
+      mediaType = 'gif';
+    } else if (/\.(mp4|webm|mov)/i.test(imageToShow)) {
+      mediaType = 'video';
+    }
+  }
+  
+  // Don't overwrite existing tags if we already have some
+  if (currentTags.length === 0) {
+    currentTags = extractedContent.tags;
+  }
+
+  // Create and show the overlay with media type
   isOverlayOpen = true;
   UI.Overlay.createOverlay({
     imageUrl: imageToShow,
+    mediaType: mediaType,
     tags: currentTags,
     pageUrl: currentPageUrl,
     onSave: handleSave,
@@ -156,21 +184,47 @@ function handleSave(tags, poolData = null) {
   }).then(response => {
     if (response && response.success) {
       UI.Toast.showSuccess("Content saved successfully!");
+      isOverlayOpen = false;
+      overlayActivatedOnce = false;
+    } else if (response && response.duplicateFound) {
+      // Show duplicate warning in the overlay
+      UI.Overlay.showDuplicateWarning(
+        response.originalRecord,
+        response.exactMatch || false
+      );
     } else {
       UI.Toast.showError("Error saving content");
+      isOverlayOpen = false;
+      overlayActivatedOnce = false;
     }
   }).catch(error => {
     console.error("Error saving:", error);
     UI.Toast.showError("Error saving content");
+    isOverlayOpen = false;
+    overlayActivatedOnce = false;
   });
-  
-  // Reset state
-  isOverlayOpen = false;
-  overlayActivatedOnce = false;
 }
 
 // Listen for messages from background script
-browser.runtime.onMessage.addListener((message) => {
+browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === "show-duplicate-warning") {
+    const { UI } = getNamespaces();
+    
+    if (message.duplicateFound && isOverlayOpen) {
+      UI.Overlay.showDuplicateWarning(
+        message.originalRecord, 
+        message.exactMatch
+      );
+    }
+    return Promise.resolve({success: true});
+  }
+  if (message.action === "compute-image-hash") {
+    window.TagSaver.Hash.computeAverageHash(message.imageUrl)
+      .then(hash => sendResponse({ success: true, hash: hash }))
+      .catch(error => sendResponse({ success: false, error: error.message }));
+    return true; // Required for async sendResponse
+  }
+
   if (message.action === "show-overlay") {
     // Use our smart function instead of direct overlay creation
     handleSmartOverlay();
@@ -188,6 +242,8 @@ browser.runtime.onMessage.addListener((message) => {
     return Promise.resolve({success: true});
   }
 });
+
+
 
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', init);
