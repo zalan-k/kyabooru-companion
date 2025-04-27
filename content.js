@@ -16,16 +16,23 @@ function init() {
   window.TagSaver.Hash = window.TagSaver.Hash || {};
   
   // Initialize UI components in correct order
-  if (window.TagSaver.UI.Styles)                                                             window.TagSaver.UI.Styles.injectStyles(window.TagSaver.UI.Styles.getAllStyles());
-  if (window.TagSaver.UI.Toast && window.TagSaver.UI.Toast.initToast)                        window.TagSaver.UI.Toast.initToast();
-  if (window.TagSaver.UI.TagPills && window.TagSaver.UI.TagPills.initTagPills)               window.TagSaver.UI.TagPills.initTagPills();
-  if (window.TagSaver.UI.ImageSelector && window.TagSaver.UI.ImageSelector.initImageSelector) window.TagSaver.UI.ImageSelector.initImageSelector();
-  if (window.TagSaver.UI.Overlay && window.TagSaver.UI.Overlay.initOverlay)                  window.TagSaver.UI.Overlay.initOverlay();
-  if (window.TagSaver.UI.HighlightManager && window.TagSaver.UI.HighlightManager.initHighlightManager) window.TagSaver.UI.HighlightManager.initHighlightManager();
+  if (window.TagSaver.UI.Styles)
+    window.TagSaver.UI.Styles.injectStyles(window.TagSaver.UI.Styles.getAllStyles());
+  if (window.TagSaver.UI.Toast && window.TagSaver.UI.Toast.initToast)
+    window.TagSaver.UI.Toast.initToast();
+  if (window.TagSaver.UI.TagPills && window.TagSaver.UI.TagPills.initTagPills)
+    window.TagSaver.UI.TagPills.initTagPills();
+  if (window.TagSaver.UI.ImageSelector && window.TagSaver.UI.ImageSelector.initImageSelector)
+    window.TagSaver.UI.ImageSelector.initImageSelector();
+  if (window.TagSaver.UI.Overlay && window.TagSaver.UI.Overlay.initOverlay)
+    window.TagSaver.UI.Overlay.initOverlay();
+  if (window.TagSaver.UI.HighlightManager && window.TagSaver.UI.HighlightManager.initHighlightManager)
+    window.TagSaver.UI.HighlightManager.initHighlightManager();
   
   // Load settings and set up highlight manager if enabled
   browser.storage.local.get('settings').then((result) => {
     const settings = result.settings || {};
+    console.log("Extension settings loaded:", settings);
     
     if (settings.duplicateDetection) {
       // Start monitoring for saved images if enabled
@@ -218,7 +225,9 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     return Promise.resolve({success: true});
   }
+  
   if (message.action === "compute-image-hash") {
+    // Handle hash computation - this needs to return a Promise
     window.TagSaver.Hash.computeAverageHash(message.imageUrl)
       .then(hash => sendResponse({ success: true, hash: hash }))
       .catch(error => sendResponse({ success: false, error: error.message }));
@@ -241,6 +250,9 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     startImageSelection();
     return Promise.resolve({success: true});
   }
+  
+  // Handle other messages...
+  return false; // No async response needed for other messages
 });
 
 

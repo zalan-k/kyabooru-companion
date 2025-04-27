@@ -262,7 +262,25 @@ function createOverlay(options = {}) {
     onSave(displayTags, poolData);
   }
   
+  /**
+   * Show a duplicate warning in the overlay
+   * @param {Object} originalRecord - The original record that was found as a duplicate
+   * @param {boolean} exactMatch - Whether this is an exact match or just similar
+   */
   function showDuplicateWarning(originalRecord, exactMatch) {
+    console.log("Showing duplicate warning", originalRecord, exactMatch);
+    
+    if (!overlayElement) {
+      console.error("Cannot show duplicate warning - overlay not active");
+      return;
+    }
+    
+    // Check if warning already exists and remove it
+    const existingWarning = overlayElement.querySelector('.duplicate-warning');
+    if (existingWarning) {
+      existingWarning.remove();
+    }
+    
     const warningContainer = document.createElement('div');
     warningContainer.className = 'duplicate-warning';
     
@@ -296,9 +314,18 @@ function createOverlay(options = {}) {
     
     warningContainer.querySelector('.cancel').addEventListener('click', () => {
       closeOverlay();
-      if (onCancel) onCancel();
     });
   }
+
+// Make sure to include showDuplicateWarning in the return statement:
+return {
+  initOverlay,
+  createOverlay,
+  closeOverlay,
+  hideImagePreview,
+  isOverlayOpen,
+  showDuplicateWarning  // Add this line
+};
 
   // Handle autocomplete suggestions
   function updateAutocompleteSuggestions() {

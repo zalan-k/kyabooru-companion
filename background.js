@@ -203,7 +203,6 @@ async function checkForDuplicateImage(imageHash, similarityThreshold = 10) {
       
       const transaction = db.transaction([TAG_STORE], 'readonly');
       const store = transaction.objectStore(TAG_STORE);
-      const index = store.index('imageHash');
       const request = store.getAll();
       
       request.onsuccess = () => {
@@ -222,27 +221,15 @@ async function checkForDuplicateImage(imageHash, similarityThreshold = 10) {
           }
           
           try {
-            // Use the Hash module in the background script
-            if (window.TagSaver && window.TagSaver.Hash) {
-              if (window.TagSaver.Hash.areSimilar(imageHash, record.imageHash, similarityThreshold)) {
-                resolve({
-                  isDuplicate: true,
-                  exactMatch: false,
-                  originalRecord: record
-                });
-                return;
-              }
-            } else {
-              // Fallback to direct comparison in case Hash module isn't available
-              const distance = calculateHammingDistance(imageHash, record.imageHash);
-              if (distance <= similarityThreshold) {
-                resolve({
-                  isDuplicate: true,
-                  exactMatch: false,
-                  originalRecord: record
-                });
-                return;
-              }
+            // Hamming distance calculation for similarity
+            const distance = calculateHammingDistance(imageHash, record.imageHash);
+            if (distance <= similarityThreshold) {
+              resolve({
+                isDuplicate: true,
+                exactMatch: false,
+                originalRecord: record
+              });
+              return;
             }
           } catch (error) {
             console.error("Error comparing hashes:", error);
@@ -376,6 +363,7 @@ async function saveJSON(data, filename) {
 }
 
 // Handle data saving
+// Update the handleSaveData function in background.js to better handle duplicate detection
 async function handleSaveData(data) {
   try {
     // Generate filenames
@@ -384,12 +372,15 @@ async function handleSaveData(data) {
     const domain = urlParts.hostname.replace(/^www\./, '');
     const baseFilename = `${domain}_${timestamp}`;
     
-    // Calculate hash if we have an image URL
+    // Initialize hash variable
     let imageHash = null;
+    
+    // Calculate hash if we have an image URL
     if (data.imageUrl) {
       try {
         // Request hash calculation from content script
         if (data.sender && data.sender.tab && data.sender.tab.id) {
+          console.log("Requesting hash calculation from content script");
           const response = await browser.tabs.sendMessage(data.sender.tab.id, {
             action: "compute-image-hash",
             imageUrl: data.imageUrl
@@ -397,15 +388,18 @@ async function handleSaveData(data) {
           
           if (response && response.success) {
             imageHash = response.hash;
+            console.log("Hash computed successfully:", imageHash);
             
             // Check for duplicates if we have a hash and duplicate detection is enabled
             if (settings.duplicateDetection !== false && imageHash) {
+              console.log("Checking for duplicates with hash:", imageHash);
               const duplicateCheck = await checkForDuplicateImage(
                 imageHash, 
                 settings.similarityThreshold || 10
               );
               
               if (duplicateCheck.isDuplicate) {
+                console.log("Duplicate found:", duplicateCheck);
                 // Notify user about duplicate
                 try {
                   await browser.tabs.sendMessage(data.sender.tab.id, {
@@ -426,10 +420,14 @@ async function handleSaveData(data) {
                 };
               }
             }
+          } else {
+            console.warn("Hash computation failed:", response);
           }
+        } else {
+          console.warn("Cannot compute hash - no sender tab information");
         }
       } catch (error) {
-        console.error("Error calculating hash:", error);
+        console.error("Error during hash calculation:", error);
         // Continue even if hash calculation fails
       }
     }
@@ -477,7 +475,7 @@ async function handleSaveData(data) {
       tags: data.tags,
       tagText: tagTexts,
       imageUrl: data.imageUrl,
-      timestamp: data.timestamp,
+      timestamp: data.timestamp || new Date().toISOString(),
       imageHash: imageHash, // Add the hash to database
       ...(data.poolId && { 
         poolId: data.poolId,
@@ -505,7 +503,7 @@ async function handleSaveData(data) {
       tags: categorizedTags,
       imageUrl: data.imageUrl,
       mediaType: mediaType,
-      timestamp: data.timestamp,
+      timestamp: data.timestamp || new Date().toISOString(),
       imageHash: imageHash, // Include hash in JSON export
       ...(data.poolId && {
         poolId: data.poolId,
@@ -526,60 +524,6 @@ async function handleSaveData(data) {
     console.error("Error in handleSaveData:", error);
     return { success: false, error: error.message };
   }
-}
-
-async function checkForDuplicateImage(imageHash, similarityThreshold = 10) {
-  return new Promise((resolve, reject) => {
-    try {
-      if (!imageHash) {
-        resolve({ isDuplicate: false });
-        return;
-      }
-      
-      const transaction = db.transaction([TAG_STORE], 'readonly');
-      const store = transaction.objectStore(TAG_STORE);
-      const request = store.getAll();
-      
-      request.onsuccess = () => {
-        const records = request.result.filter(record => record.imageHash);
-        
-        // Check each record for similar hash
-        for (const record of records) {
-          if (record.imageHash === imageHash) {
-            // Exact match
-            resolve({
-              isDuplicate: true,
-              exactMatch: true,
-              originalRecord: record
-            });
-            return;
-          }
-          
-          try {
-            // Hamming distance calculation for similarity
-            const distance = calculateHammingDistance(imageHash, record.imageHash);
-            if (distance <= similarityThreshold) {
-              resolve({
-                isDuplicate: true,
-                exactMatch: false,
-                originalRecord: record
-              });
-              return;
-            }
-          } catch (error) {
-            console.error("Error comparing hashes:", error);
-            // Continue with next record
-          }
-        }
-        
-        resolve({ isDuplicate: false });
-      };
-      
-      request.onerror = (event) => reject(event.target.error);
-    } catch (error) {
-      reject(error);
-    }
-  });
 }
 
 // Helper function for hash comparison
@@ -860,7 +804,11 @@ async function showContentOverlay() {
 // Listen for messages from content script
 browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === "save-data") {
-    handleSaveData(message.data)
+    const dataWithSender = {
+      ...message.data,
+      sender: sender
+    };
+    handleSaveData(dataWithSender)
       .then(result => sendResponse(result))
       .catch(error => sendResponse({ success: false, error: error.message }));
     return true; // Required for async sendResponse
@@ -883,27 +831,68 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
       });
     return true; // Required for async sendResponse
   }
-
-  if (message.action === "export-database") {
+  else if (message.action === "export-database") {
     exportDatabase()
       .then(() => sendResponse({ success: true }))
       .catch(error => sendResponse({ success: false, error: error.message }));
     return true;
   }
-  
-  if (message.action === "import-database") {
+  else if (message.action === "import-database") {
     // Parse the data from the message
     importDatabase(message.data)
       .then(count => sendResponse({ success: true, count }))
       .catch(error => sendResponse({ success: false, error: error.message }));
     return true;
   }
-
-  if (message.action === "process-all-tabs") {
+  else if (message.action === "process-all-tabs") {
     processAllTabs()
       .then(result => sendResponse(result))
       .catch(error => sendResponse({ success: false, error: error.message }));
     return true;
+  }
+  else if (message.action === "check-image-hash") {
+    // Query the database for this hash
+    const transaction = db.transaction([TAG_STORE], 'readonly');
+    const store = transaction.objectStore(TAG_STORE);
+    
+    try {
+      const hash = message.hash;
+      const request = store.getAll();
+      
+      request.onsuccess = () => {
+        const records = request.result.filter(record => record.imageHash);
+        let exists = false;
+        
+        // Check each record for similar hash
+        for (const record of records) {
+          if (record.imageHash === hash) {
+            // Exact match
+            exists = true;
+            break;
+          }
+          
+          // For similarity, use the threshold from settings
+          const similarityThreshold = settings.similarityThreshold || 10;
+          const distance = calculateHammingDistance(hash, record.imageHash);
+          if (distance <= similarityThreshold) {
+            exists = true;
+            break;
+          }
+        }
+        
+        sendResponse({ exists: exists });
+      };
+      
+      request.onerror = (event) => {
+        console.error("Error checking hash:", event.target.error);
+        sendResponse({ exists: false, error: event.target.error });
+      };
+    } catch (error) {
+      console.error("Error in check-image-hash:", error);
+      sendResponse({ exists: false, error: error.message });
+    }
+    
+    return true; // Keep the message channel open for async response
   }
 
 });

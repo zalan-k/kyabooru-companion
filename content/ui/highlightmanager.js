@@ -15,6 +15,7 @@ window.TagSaver.UI.HighlightManager = (function() {
   
   // Throttle control
   let isProcessing = false;
+  let isEnabled = false;
   
   /**
    * Initialize the highlight manager
@@ -54,10 +55,12 @@ window.TagSaver.UI.HighlightManager = (function() {
    * Process visible images in viewport to check for saved duplicates
    */
   async function processVisibleImages() {
-    if (isProcessing) return;
+    if (isProcessing || !isEnabled) return;
     isProcessing = true;
     
     try {
+      console.log("Processing visible images for highlighting");
+      
       // Get all images that are in the viewport and haven't been processed yet
       const images = Array.from(document.querySelectorAll('img'))
         .filter(img => {
@@ -77,6 +80,8 @@ window.TagSaver.UI.HighlightManager = (function() {
           );
         });
       
+      console.log(`Found ${images.length} images to process`);
+      
       // Process in batches of 5 to avoid UI freezing
       const batchSize = 5;
       for (let i = 0; i < images.length; i += batchSize) {
@@ -85,8 +90,8 @@ window.TagSaver.UI.HighlightManager = (function() {
         // Process batch
         await Promise.all(batch.map(async (img) => {
           try {
-            // Skip images without src
-            if (!img.src) return;
+            // Skip images without src or with data URLs (often thumbnails)
+            if (!img.src || img.src.startsWith('data:')) return;
             
             // Check cache first
             if (hashCache[img.src]) {
@@ -99,27 +104,37 @@ window.TagSaver.UI.HighlightManager = (function() {
             }
             
             // Calculate hash
-            const hash = await window.TagSaver.Hash.computeAverageHash(img.src);
-            
-            // Cache the hash
-            hashCache[img.src] = hash;
-            
-            // Check against database
-            const isDuplicate = await checkImageAgainstDatabase(hash);
-            if (isDuplicate) {
-              highlightImage(img);
+            try {
+              const hash = await window.TagSaver.Hash.computeAverageHash(img.src);
+              
+              // Cache the hash
+              hashCache[img.src] = hash;
+              
+              // Check against database
+              const isDuplicate = await checkImageAgainstDatabase(hash);
+              if (isDuplicate) {
+                highlightImage(img);
+              }
+              
+              // Mark as processed
+              highlightedImages.add(img);
+            } catch (hashError) {
+              console.error(`Error computing hash for image: ${img.src}`, hashError);
+              // Still mark as processed to avoid retrying repeatedly
+              highlightedImages.add(img);
             }
-            
-            // Mark as processed
-            highlightedImages.add(img);
           } catch (error) {
             console.error(`Error processing image: ${img.src}`, error);
+            // Mark as processed to avoid infinite retries
+            highlightedImages.add(img);
           }
         }));
         
         // Short delay between batches to let UI breathe
         await new Promise(resolve => setTimeout(resolve, 50));
       }
+    } catch (error) {
+      console.error("Error in processVisibleImages:", error);
     } finally {
       isProcessing = false;
     }
@@ -132,11 +147,13 @@ window.TagSaver.UI.HighlightManager = (function() {
    */
   async function checkImageAgainstDatabase(hash) {
     try {
+      console.log(`Checking hash against database: ${hash}`);
       const response = await browser.runtime.sendMessage({
         action: "check-image-hash",
         hash: hash
       });
       
+      console.log(`Hash check response:`, response);
       return response && response.exists;
     } catch (error) {
       console.error("Error checking image hash:", error);
@@ -149,6 +166,7 @@ window.TagSaver.UI.HighlightManager = (function() {
    * @param {HTMLImageElement} img - Image to highlight
    */
   function highlightImage(img) {
+    console.log(`Highlighting image: ${img.src.substring(0, 50)}...`);
     img.classList.add('ts-saved-image-highlight');
   }
   
@@ -156,17 +174,21 @@ window.TagSaver.UI.HighlightManager = (function() {
    * Start monitoring for images to highlight
    */
   function startMonitoring() {
+    console.log("Starting image monitoring for duplicates");
+    isEnabled = true;
     initHighlightManager();
     
     // Process visible images immediately
-    processVisibleImages();
+    setTimeout(processVisibleImages, 500);
     
     // Set up scroll listener (throttled)
     let scrollTimeout;
-    window.addEventListener('scroll', () => {
+    const scrollHandler = () => {
       if (scrollTimeout) clearTimeout(scrollTimeout);
       scrollTimeout = setTimeout(processVisibleImages, 200);
-    });
+    };
+    
+    window.addEventListener('scroll', scrollHandler);
     
     // Set up mutation observer to detect new images
     if (!observerInstance) {
@@ -188,8 +210,8 @@ window.TagSaver.UI.HighlightManager = (function() {
           }
         });
         
-        if (hasNewImages) {
-          processVisibleImages();
+        if (hasNewImages && isEnabled) {
+          setTimeout(processVisibleImages, 200);
         }
       });
       
@@ -204,6 +226,9 @@ window.TagSaver.UI.HighlightManager = (function() {
    * Stop monitoring for images
    */
   function stopMonitoring() {
+    console.log("Stopping image monitoring");
+    isEnabled = false;
+    
     if (observerInstance) {
       observerInstance.disconnect();
       observerInstance = null;

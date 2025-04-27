@@ -5,16 +5,33 @@
 window.TagSaver = window.TagSaver || {};
 window.TagSaver.Hash = (function() {
   
+  // Cache to avoid re-computing hashes
+  const hashCache = {};
+  
   /**
    * Compute average hash (aHash) for an image
    * @param {string} imageUrl - URL of the image
    * @returns {Promise<string>} - Hash as hex string
    */
   async function computeAverageHash(imageUrl) {
+    // Check cache first
+    if (hashCache[imageUrl]) {
+      console.log(`Using cached hash for ${imageUrl.substring(0, 50)}...`);
+      return hashCache[imageUrl];
+    }
+    
     return new Promise((resolve, reject) => {
+      console.log(`Computing hash for ${imageUrl.substring(0, 50)}...`);
+      
       const img = new Image();
       
+      // Set timeout to avoid hanging on image load
+      const timeoutId = setTimeout(() => {
+        reject(new Error(`Image load timeout: ${imageUrl}`));
+      }, 10000); // 10 second timeout
+      
       img.onload = function() {
+        clearTimeout(timeoutId);
         try {
           // Create a small 8x8 canvas for the hash
           const canvas = document.createElement('canvas');
@@ -33,8 +50,8 @@ window.TagSaver.Hash = (function() {
           const grayPixels = [];
           
           for (let i = 0; i < imageData.length; i += 4) {
-            // Convert to grayscale
-            const gray = Math.floor((imageData[i] + imageData[i+1] + imageData[i+2]) / 3);
+            // Convert to grayscale - use proper weighting for human perception
+            const gray = Math.floor(0.299 * imageData[i] + 0.587 * imageData[i+1] + 0.114 * imageData[i+2]);
             grayPixels.push(gray);
             sum += gray;
           }
@@ -49,21 +66,54 @@ window.TagSaver.Hash = (function() {
           }
           
           // Convert binary string to hex for storage
-          const hashHex = parseInt(hashString, 2).toString(16).padStart(16, '0');
+          const hashHex = binaryToHex(hashString);
+          
+          // Cache the result
+          hashCache[imageUrl] = hashHex;
+          
+          console.log(`Hash computed: ${hashHex}`);
           resolve(hashHex);
         } catch (error) {
+          console.error("Error computing hash:", error);
           reject(error);
         }
       };
       
-      img.onerror = function() {
+      img.onerror = function(e) {
+        clearTimeout(timeoutId);
+        console.error(`Failed to load image for hashing: ${imageUrl}`, e);
         reject(new Error(`Failed to load image: ${imageUrl}`));
       };
       
-      // Load image
-      img.crossOrigin = 'Anonymous';
-      img.src = imageUrl;
+      // Load image with proper error handling
+      try {
+        img.crossOrigin = 'Anonymous';
+        img.src = imageUrl;
+      } catch (error) {
+        clearTimeout(timeoutId);
+        console.error(`Error setting image src: ${imageUrl}`, error);
+        reject(error);
+      }
     });
+  }
+  
+  /**
+   * Convert binary string to hex
+   * @param {string} binaryStr - Binary string
+   * @returns {string} - Hex string
+   */
+  function binaryToHex(binaryStr) {
+    let output = '';
+    // Process 4 bits at a time (1 hex digit = 4 binary digits)
+    for (let i = 0; i < binaryStr.length; i += 4) {
+      // Get 4 bits
+      const chunk = binaryStr.substr(i, 4);
+      // Convert to decimal
+      const decimal = parseInt(chunk, 2);
+      // Convert to hex
+      output += decimal.toString(16);
+    }
+    return output;
   }
   
   /**
@@ -73,19 +123,50 @@ window.TagSaver.Hash = (function() {
    * @returns {number} - Hamming distance
    */
   function hammingDistance(hash1, hash2) {
-    // Convert hex to binary
-    const bin1 = parseInt(hash1, 16).toString(2).padStart(64, '0');
-    const bin2 = parseInt(hash2, 16).toString(2).padStart(64, '0');
-    
-    // Count differing bits
-    let distance = 0;
-    for (let i = 0; i < bin1.length; i++) {
-      if (bin1[i] !== bin2[i]) {
-        distance++;
-      }
+    if (!hash1 || !hash2) {
+      console.error("Invalid hashes provided to hammingDistance", { hash1, hash2 });
+      return Infinity; // Return a large distance for invalid hashes
     }
     
-    return distance;
+    try {
+      // Convert hex to binary
+      const bin1 = hexToBinary(hash1);
+      const bin2 = hexToBinary(hash2);
+      
+      // Ensure equal length
+      const minLength = Math.min(bin1.length, bin2.length);
+      
+      // Count differing bits
+      let distance = 0;
+      for (let i = 0; i < minLength; i++) {
+        if (bin1[i] !== bin2[i]) {
+          distance++;
+        }
+      }
+      
+      // Add difference in length as additional distance
+      distance += Math.abs(bin1.length - bin2.length);
+      
+      return distance;
+    } catch (error) {
+      console.error("Error calculating hamming distance:", error);
+      return Infinity; // Return a large distance on error
+    }
+  }
+  
+  /**
+   * Convert hex string to binary string
+   * @param {string} hex - Hex string
+   * @returns {string} - Binary string
+   */
+  function hexToBinary(hex) {
+    let binary = '';
+    for (let i = 0; i < hex.length; i++) {
+      const decimal = parseInt(hex[i], 16);
+      const bits = decimal.toString(2).padStart(4, '0');
+      binary += bits;
+    }
+    return binary;
   }
   
   /**
@@ -104,6 +185,9 @@ window.TagSaver.Hash = (function() {
   return {
     computeAverageHash,
     hammingDistance,
-    areSimilar
+    areSimilar,
+    // Export helper functions for debugging
+    hexToBinary,
+    binaryToHex
   };
 })();
