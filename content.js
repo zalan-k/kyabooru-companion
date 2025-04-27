@@ -29,17 +29,25 @@ function init() {
   if (window.TagSaver.UI.HighlightManager && window.TagSaver.UI.HighlightManager.initHighlightManager)
     window.TagSaver.UI.HighlightManager.initHighlightManager();
   
-  // Load settings and set up highlight manager if enabled
+  // Check if current site is supported
+  // Load settings for ALL sites first
   browser.storage.local.get('settings').then((result) => {
     const settings = result.settings || {};
     console.log("Extension settings loaded:", settings);
     
-    if (settings.duplicateDetection) {
-      // Start monitoring for saved images if enabled
-      if (window.TagSaver.UI.HighlightManager) {
-        window.TagSaver.UI.HighlightManager.startMonitoring();
-      }
+    // Check if current site is supported
+    const currentUrl = window.location.href;
+    const isSupportedSite = window.TagSaver.Extractors && window.TagSaver.Extractors.isSupportedSite && window.TagSaver.Extractors.isSupportedSite(currentUrl);
+    
+    // Only start highlight manager on supported sites when enabled
+    if (isSupportedSite && settings.duplicateDetection) {
+      if (window.TagSaver.UI.HighlightManager) window.TagSaver.UI.HighlightManager.startMonitoring();
     }
+    
+    // Store settings for later use if needed
+    window.TagSaver.settings = settings;
+  }).catch(error => {
+    console.error("Error loading settings:", error);
   });
 
   // Add keyboard shortcut after all components are ready

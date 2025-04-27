@@ -52,35 +52,60 @@ window.TagSaver.UI.HighlightManager = (function() {
   }
   
   /**
-   * Process visible images in viewport to check for saved duplicates
+   * Check if we're on a supported site and get the appropriate images to process
+   * @returns {Array} Array of image elements to process
    */
-  async function processVisibleImages() {
+  function getImagesToProcess() {
+    // Check if we're on a supported site
+    const currentUrl = window.location.href;
+    const Extractors = window.TagSaver.Extractors;
+    
+    if (!Extractors || !Extractors.isSupportedSite(currentUrl)) {
+      console.log("Not on a supported site, skipping highlight processing");
+      return [];
+    }
+    
+    // Get gallery images from the appropriate extractor
+    const galleryImages = Extractors.getGalleryImagesToHighlight(currentUrl);
+    
+    if (!galleryImages || galleryImages.length === 0) {
+      console.log("No gallery images found by the extractor");
+      return [];
+    }
+    
+    // Convert to array if NodeList
+    const imagesArray = Array.from(galleryImages);
+    
+    // Filter out already processed images
+    const filteredImages = imagesArray.filter(img => {
+      // Skip already processed images
+      if (highlightedImages.has(img)) return false;
+      
+      // Skip tiny images (likely icons)
+      if (img.width < 60 || img.height < 60) return false;
+      
+      // Skip images without valid src
+      if (!img.src || img.src.startsWith('data:')) return false;
+      
+      return true;
+    });
+    
+    console.log(`Found ${filteredImages.length} gallery images to process`);
+    return filteredImages;
+  }
+  
+  /**
+   * Process site-specific gallery images to check for saved duplicates
+   */
+  async function processGalleryImages() {
     if (isProcessing || !isEnabled) return;
     isProcessing = true;
     
     try {
-      console.log("Processing visible images for highlighting");
+      console.log("Processing gallery images for highlighting");
       
-      // Get all images that are in the viewport and haven't been processed yet
-      const images = Array.from(document.querySelectorAll('img'))
-        .filter(img => {
-          // Skip already processed images
-          if (highlightedImages.has(img)) return false;
-          
-          // Skip tiny images (likely icons)
-          if (img.width < 60 || img.height < 60) return false;
-          
-          // Check if in viewport
-          const rect = img.getBoundingClientRect();
-          return (
-            rect.top >= 0 &&
-            rect.left >= 0 &&
-            rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
-            rect.right <= (window.innerWidth || document.documentElement.clientWidth)
-          );
-        });
-      
-      console.log(`Found ${images.length} images to process`);
+      // Get relevant images from the site-specific extractor
+      const images = getImagesToProcess();
       
       // Process in batches of 5 to avoid UI freezing
       const batchSize = 5;
@@ -90,9 +115,6 @@ window.TagSaver.UI.HighlightManager = (function() {
         // Process batch
         await Promise.all(batch.map(async (img) => {
           try {
-            // Skip images without src or with data URLs (often thumbnails)
-            if (!img.src || img.src.startsWith('data:')) return;
-            
             // Check cache first
             if (hashCache[img.src]) {
               const isDuplicate = await checkImageAgainstDatabase(hashCache[img.src]);
@@ -134,7 +156,7 @@ window.TagSaver.UI.HighlightManager = (function() {
         await new Promise(resolve => setTimeout(resolve, 50));
       }
     } catch (error) {
-      console.error("Error in processVisibleImages:", error);
+      console.error("Error in processGalleryImages:", error);
     } finally {
       isProcessing = false;
     }
@@ -147,13 +169,20 @@ window.TagSaver.UI.HighlightManager = (function() {
    */
   async function checkImageAgainstDatabase(hash) {
     try {
+      // Make sure hash is defined and valid
+      if (!hash) {
+        console.error("Attempted to check undefined hash");
+        return false;
+      }
+      
       console.log(`Checking hash against database: ${hash}`);
       const response = await browser.runtime.sendMessage({
         action: "check-image-hash",
         hash: hash
       });
       
-      console.log(`Hash check response:`, response);
+      // Log the response for debugging
+      console.log(`Database response for hash ${hash}:`, response);
       return response && response.exists;
     } catch (error) {
       console.error("Error checking image hash:", error);
@@ -174,18 +203,27 @@ window.TagSaver.UI.HighlightManager = (function() {
    * Start monitoring for images to highlight
    */
   function startMonitoring() {
-    console.log("Starting image monitoring for duplicates");
+    // Check if we're on a supported site
+    const Extractors = window.TagSaver.Extractors;
+    const currentUrl = window.location.href;
+    
+    if (!Extractors || !Extractors.isSupportedSite(currentUrl)) {
+      console.log("Not on a supported site, highlight manager not started");
+      return;
+    }
+    
+    console.log("Starting image monitoring for duplicates on supported site");
     isEnabled = true;
     initHighlightManager();
     
-    // Process visible images immediately
-    setTimeout(processVisibleImages, 500);
+    // Process gallery images immediately
+    setTimeout(processGalleryImages, 500);
     
     // Set up scroll listener (throttled)
     let scrollTimeout;
     const scrollHandler = () => {
       if (scrollTimeout) clearTimeout(scrollTimeout);
-      scrollTimeout = setTimeout(processVisibleImages, 200);
+      scrollTimeout = setTimeout(processGalleryImages, 200);
     };
     
     window.addEventListener('scroll', scrollHandler);
@@ -211,7 +249,7 @@ window.TagSaver.UI.HighlightManager = (function() {
         });
         
         if (hasNewImages && isEnabled) {
-          setTimeout(processVisibleImages, 200);
+          setTimeout(processGalleryImages, 200);
         }
       });
       
@@ -235,7 +273,7 @@ window.TagSaver.UI.HighlightManager = (function() {
     }
     
     // Clean up event listeners
-    window.removeEventListener('scroll', processVisibleImages);
+    window.removeEventListener('scroll', processGalleryImages);
     
     // Clear highlights
     document.querySelectorAll('.ts-saved-image-highlight').forEach(img => {
@@ -251,6 +289,6 @@ window.TagSaver.UI.HighlightManager = (function() {
     initHighlightManager,
     startMonitoring,
     stopMonitoring,
-    processVisibleImages
+    processGalleryImages
   };
 })();

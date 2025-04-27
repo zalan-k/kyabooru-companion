@@ -851,16 +851,25 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
   else if (message.action === "check-image-hash") {
-    // Query the database for this hash
-    const transaction = db.transaction([TAG_STORE], 'readonly');
-    const store = transaction.objectStore(TAG_STORE);
-    
     try {
+      // Validate the hash parameter exists
+      if (!message.hash) {
+        console.error("Missing hash parameter in check-image-hash request");
+        sendResponse({ exists: false, error: "Missing hash parameter" });
+        return true;
+      }
+      
       const hash = message.hash;
+      console.log(`Background: Processing check-image-hash for ${hash}`);
+      
+      const transaction = db.transaction([TAG_STORE], 'readonly');
+      const store = transaction.objectStore(TAG_STORE);
       const request = store.getAll();
       
       request.onsuccess = () => {
         const records = request.result.filter(record => record.imageHash);
+        console.log(`Found ${records.length} records with imageHash to compare against`);
+        
         let exists = false;
         
         // Check each record for similar hash
@@ -868,24 +877,33 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
           if (record.imageHash === hash) {
             // Exact match
             exists = true;
+            console.log(`Background: Found exact match for ${hash}`);
             break;
           }
           
           // For similarity, use the threshold from settings
           const similarityThreshold = settings.similarityThreshold || 10;
-          const distance = calculateHammingDistance(hash, record.imageHash);
-          if (distance <= similarityThreshold) {
-            exists = true;
-            break;
+          try {
+            const distance = calculateHammingDistance(hash, record.imageHash);
+            console.log(`Distance between ${hash} and ${record.imageHash}: ${distance}`);
+            
+            if (distance <= similarityThreshold) {
+              exists = true;
+              console.log(`Background: Found similar match for ${hash}, distance: ${distance}`);
+              break;
+            }
+          } catch (error) {
+            console.error("Error comparing hashes:", error);
           }
         }
         
+        console.log(`Background: Responding with exists: ${exists}`);
         sendResponse({ exists: exists });
       };
       
       request.onerror = (event) => {
         console.error("Error checking hash:", event.target.error);
-        sendResponse({ exists: false, error: event.target.error });
+        sendResponse({ exists: false, error: event.target.error.message });
       };
     } catch (error) {
       console.error("Error in check-image-hash:", error);

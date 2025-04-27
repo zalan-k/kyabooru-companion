@@ -55,6 +55,27 @@ window.TagSaver.GelbooruExtractor = (function() {
       // Get main image
       const mainImage = document.querySelector('#image');
       return mainImage ? mainImage.src : null;
+    },
+
+    /**
+     * Get gallery images that should be checked for highlighting
+     * @returns {NodeList|Array} - NodeList or Array of image elements to process for highlighting
+     */
+    getGalleryImages() {
+      // For Gelbooru, the post thumbnails on index/search pages
+      const thumbnailsView = document.querySelector('#thumbnails');
+      if (thumbnailsView) {
+        return document.querySelectorAll('#thumbnails img');
+      }
+      
+      // For Gelbooru post view, don't process (we're already saving that main image)
+      const postView = document.querySelector('#image');
+      if (postView) {
+        return []; // Empty array
+      }
+      
+      // Default: return empty array
+      return [];
     }
   };
 })();

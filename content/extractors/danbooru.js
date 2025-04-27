@@ -64,6 +64,28 @@ window.TagSaver.DanbooruExtractor = (function() {
       // Get main image
       const mainImage = document.querySelector('#image');
       return mainImage ? mainImage.src : null;
+    },
+
+    /**
+     * Get gallery images that should be checked for highlighting
+     * @returns {NodeList} - NodeList of image elements to process for highlighting
+     */
+    getGalleryImages() {
+      // For Danbooru, get thumbnail images from post-preview elements in gallery view
+      const thumbnails = document.querySelectorAll('.post-preview img.post-preview-image');
+      if (thumbnails && thumbnails.length > 0) {
+        return thumbnails;
+      }
+      
+      // For Danbooru post view, don't process (we're already saving that main image)
+      const postView = document.querySelector('#image');
+      if (postView) {
+        return [postView];
+      }
+
+      // Fallback: if no images found, return an empty array
+      console.log('No Danbooru gallery images found');
+      return [];
     }
   };
 })();

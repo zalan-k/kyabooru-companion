@@ -36,6 +36,15 @@ window.TagSaver.TwitterExtractor = (function() {
       // Get the main image if present
       const tweetImage = document.querySelector('article img[src*="https"]');
       return tweetImage ? tweetImage.src : null;
+    },
+
+    /**
+     * Get gallery images that should be checked for highlighting
+     * @returns {NodeList|Array} - NodeList or Array of image elements to process for highlighting
+     */
+    getGalleryImages() {
+      // For Twitter/X, look for images in the timeline
+      return document.querySelectorAll('article img[src*="https"][width="100%"]');
     }
   };
 })();

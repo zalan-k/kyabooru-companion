@@ -59,10 +59,21 @@ window.TagSaver.Extractors = (function() {
     };
   }
 
+  function getGalleryImagesToHighlight(url) {
+    const extractor = getExtractorForUrl(url);
+    
+    if (!extractor || !extractor.getGalleryImages) {
+      return []; // Return empty array if no extractor or method not implemented
+    }
+    
+    return extractor.getGalleryImages();
+  }
+
   // Public API
   return {
     getExtractorForUrl,
     isSupportedSite,
-    extractPageContent
+    extractPageContent,
+    getGalleryImagesToHighlight
   };
 })();
