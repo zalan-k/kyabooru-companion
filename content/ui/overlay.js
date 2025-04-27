@@ -261,71 +261,6 @@ function createOverlay(options = {}) {
     // Call the save callback with pool data
     onSave(displayTags, poolData);
   }
-  
-  /**
-   * Show a duplicate warning in the overlay
-   * @param {Object} originalRecord - The original record that was found as a duplicate
-   * @param {boolean} exactMatch - Whether this is an exact match or just similar
-   */
-  function showDuplicateWarning(originalRecord, exactMatch) {
-    console.log("Showing duplicate warning", originalRecord, exactMatch);
-    
-    if (!overlayElement) {
-      console.error("Cannot show duplicate warning - overlay not active");
-      return;
-    }
-    
-    // Check if warning already exists and remove it
-    const existingWarning = overlayElement.querySelector('.duplicate-warning');
-    if (existingWarning) {
-      existingWarning.remove();
-    }
-    
-    const warningContainer = document.createElement('div');
-    warningContainer.className = 'duplicate-warning';
-    
-    const warningMessage = exactMatch ? 
-      'This image appears to be an exact duplicate of one you already saved!' :
-      'This image appears to be very similar to one you already saved!';
-    
-    const warningDate = new Date(originalRecord.timestamp).toLocaleString();
-    
-    warningContainer.innerHTML = `
-      <div class="warning-icon">⚠️</div>
-      <div class="warning-message">
-        <strong>${warningMessage}</strong>
-        <p>Previously saved on ${warningDate}</p>
-        <div class="warning-tags">
-          Tags: ${originalRecord.tags.slice(0, 5).join(', ')}${originalRecord.tags.length > 5 ? '...' : ''}
-        </div>
-      </div>
-      <div class="warning-actions">
-        <button class="warning-action save-anyway">Save Anyway</button>
-        <button class="warning-action cancel">Cancel</button>
-      </div>
-    `;
-    
-    overlayElement.querySelector('.overlay-content').prepend(warningContainer);
-    
-    // Add event listeners
-    warningContainer.querySelector('.save-anyway').addEventListener('click', () => {
-      warningContainer.remove();
-    });
-    
-    warningContainer.querySelector('.cancel').addEventListener('click', () => {
-      closeOverlay();
-    });
-  }
-
-// Make sure to include showDuplicateWarning in the return statement:
-return {
-  initOverlay,
-  createOverlay,
-  closeOverlay,
-  hideImagePreview,
-  isOverlayOpen,
-  showDuplicateWarning  // Add this line
-};
 
   // Handle autocomplete suggestions
   function updateAutocompleteSuggestions() {
@@ -588,11 +523,67 @@ return {
     return overlayElement !== null;
   }
 
+    /**
+   * Show a duplicate warning in the overlay
+   * @param {Object} originalRecord - The original record that was found as a duplicate
+   * @param {boolean} exactMatch - Whether this is an exact match or just similar
+   */
+    function showDuplicateWarning(originalRecord, exactMatch) {
+      console.log("Showing duplicate warning", originalRecord, exactMatch);
+      
+      if (!overlayElement) {
+        console.error("Cannot show duplicate warning - overlay not active");
+        return;
+      }
+      
+      // Check if warning already exists and remove it
+      const existingWarning = overlayElement.querySelector('.duplicate-warning');
+      if (existingWarning) {
+        existingWarning.remove();
+      }
+      
+      const warningContainer = document.createElement('div');
+      warningContainer.className = 'duplicate-warning';
+      
+      const warningMessage = exactMatch ? 
+        'This image appears to be an exact duplicate of one you already saved!' :
+        'This image appears to be very similar to one you already saved!';
+      
+      const warningDate = new Date(originalRecord.timestamp).toLocaleString();
+      
+      warningContainer.innerHTML = `
+        <div class="warning-icon">⚠️</div>
+        <div class="warning-message">
+          <strong>${warningMessage}</strong>
+          <p>Previously saved on ${warningDate}</p>
+          <div class="warning-tags">
+            Tags: ${originalRecord.tags.slice(0, 5).join(', ')}${originalRecord.tags.length > 5 ? '...' : ''}
+          </div>
+        </div>
+        <div class="warning-actions">
+          <button class="warning-action save-anyway">Save Anyway</button>
+          <button class="warning-action cancel">Cancel</button>
+        </div>
+      `;
+      
+      overlayElement.querySelector('.overlay-content').prepend(warningContainer);
+      
+      // Add event listeners
+      warningContainer.querySelector('.save-anyway').addEventListener('click', () => {
+        warningContainer.remove();
+      });
+      
+      warningContainer.querySelector('.cancel').addEventListener('click', () => {
+        closeOverlay();
+      });
+    }
+
   return {
     initOverlay,
     createOverlay,
     closeOverlay,
     hideImagePreview,
-    isOverlayOpen
+    isOverlayOpen,
+    showDuplicateWarning  // Add this line
   };
 })();
