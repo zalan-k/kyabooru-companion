@@ -74,30 +74,25 @@ window.TagSaver.TwitterExtractor = (function() {
       try {
         const url = new URL(originalUrl);
         const pathParts = url.pathname.split('/');
-        let mediaId = pathParts[pathParts.length - 1]; // e.g., "GpjzPS-bEAAJ9LW" or "GpjzPS-bEAAJ9LW.jpg"
-        
-        // First, clean up the mediaId by removing any query parameters
-        mediaId = mediaId.split('?')[0];
-        
-        const knownExtensions = ['jpg', 'png', 'webp', 'gif'];
-        
-        // Check if mediaId already ends with a known extension
-        const hasExtension = knownExtensions.some(ext => mediaId.toLowerCase().endsWith(`.${ext}`));
-        
-        // Get format from URL parameters or default to jpg
-        const format = url.searchParams.get('format') || 'jpg';
-        
-        let finalUrl;
-        if (hasExtension) {
-          finalUrl = `https://${url.host}/media/${mediaId}`;
-        } else {
-          finalUrl = `https://${url.host}/media/${mediaId}.${format}`;
-        }
-        
-        return finalUrl;
+        let mediaId = pathParts.pop();
+    
+        // Extract existing extension if present
+        const [baseId, existingExt] = mediaId.split('.');
+        const hasExtension = existingExt && !existingExt.includes('?');
+    
+        // Use existing extension as default, fallback to URL's format param
+        const format = hasExtension ? existingExt : 
+                       url.searchParams.get('format') || 'jpg';
+    
+        // Preserve critical parameters
+        const params = new URLSearchParams();
+        if (url.searchParams.has('name')) params.set('name', url.searchParams.get('name'));
+    
+        // Rebuild URL
+        return `https://${url.host}/media/${baseId}.${format}?name=orig`;
       } catch (error) {
         console.error("Error formatting Twitter URL:", error, originalUrl);
-        return originalUrl; // Return original on error
+        return originalUrl;
       }
     }
   };

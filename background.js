@@ -595,7 +595,7 @@ async function handleSaveData(data) {
       const isPixivUrl = data.imageUrl.includes('pximg.net');
       
       // Extract file extension or default to jpg
-      let extension = data.imageUrl.split('.').pop().split('?')[0] || 'jpg';
+      let extension = data.imageUrl.split('.').pop().split(/[?#]/)[0] || 'jpg';
       
       // For Pixiv URLs with _p0, get the extension from the filename
       if (isPixivUrl && data.imageUrl.includes('_p0')) {
