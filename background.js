@@ -266,9 +266,27 @@ async function downloadMedia(mediaUrl, filename) {
   try {
     // For videos, we might need to use fetch to download properly
     const contentType = await detectContentType(mediaUrl);
+    const isPixivUrl = mediaUrl.includes('pximg.net'); // Special Pixiv handling
     
     if (contentType === 'video') {
-      const response = await fetch(mediaUrl);
+      let fetchOptions = {};
+      
+      if (isPixivUrl) {
+        fetchOptions = {
+          headers: {
+            'Referer': 'https://www.pixiv.net/'
+          }
+        };
+      }
+      const response = await fetch(mediaUrl, { 
+        method: 'GET',
+        ...fetchOptions
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch video: ${response.status} ${response.statusText}`);
+      }
+      
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       
@@ -280,8 +298,86 @@ async function downloadMedia(mediaUrl, filename) {
       
       setTimeout(() => URL.revokeObjectURL(url), 1000);
       return contentType;
+    } else if (isPixivUrl) {
+      // For Pixiv images, we need to use fetch with the Referer header
+      console.log("Downloading Pixiv image with special handling:", mediaUrl);
+      
+      try {
+        const response = await fetch(mediaUrl, {
+          headers: {
+            'Referer': 'https://www.pixiv.net/'
+          }
+        });
+        
+        if (!response.ok) {
+          console.error(`Pixiv fetch failed: ${response.status} ${response.statusText}`);
+          
+          // Try with .png extension if .jpg failed (common on Pixiv)
+          if (mediaUrl.endsWith('.jpg') || mediaUrl.endsWith('_p0.jpg')) {
+            const pngUrl = mediaUrl.replace(/\.jpg$|_p0\.jpg$/, '_p0.png');
+            console.log("Trying PNG instead:", pngUrl);
+            
+            const pngResponse = await fetch(pngUrl, {
+              headers: {
+                'Referer': 'https://www.pixiv.net/'
+              }
+            });
+            
+            if (!pngResponse.ok) {
+              throw new Error(`Pixiv PNG fetch also failed: ${pngResponse.status}`);
+            }
+            
+            const blob = await pngResponse.blob();
+            const url = URL.createObjectURL(blob);
+            
+            // Update filename to match PNG extension
+            let pngFilename = filename;
+            if (pngFilename.endsWith('.jpg')) {
+              pngFilename = pngFilename.replace(/\.jpg$/, '.png');
+            }
+            
+            await browser.downloads.download({
+              url: url,
+              filename: `${settings.saveFolder}/${pngFilename}`,
+              saveAs: false
+            });
+            
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+            return 'image';
+          } else {
+            throw new Error(`Pixiv fetch failed: ${response.status} ${response.statusText}`);
+          }
+        }
+        
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        
+        await browser.downloads.download({
+          url: url,
+          filename: `${settings.saveFolder}/${filename}`,
+          saveAs: false
+        });
+        
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        return 'image';
+      } catch (pixivError) {
+        console.error("Pixiv special download failed:", pixivError);
+        // Fall back to regular download as a last resort
+        await browser.downloads.download({
+          url: mediaUrl,
+          filename: `${settings.saveFolder}/${filename}`,
+          saveAs: false,
+          headers: [
+            { name: 'Referer', value: 'https://www.pixiv.net/' }
+          ]
+        }).catch(err => {
+          console.error("Final download attempt failed:", err);
+          throw err;
+        });
+        return 'image';
+      }
     } else {
-      // Regular download for images and GIFs
+      // Regular download for other images and GIFs
       await browser.downloads.download({
         url: mediaUrl,
         filename: `${settings.saveFolder}/${filename}`,
@@ -367,8 +463,14 @@ async function handleSaveData(data) {
   try {
     // Generate filenames
     const timestamp = new Date().getTime();
-    const urlParts = new URL(data.url);
-    const domain = urlParts.hostname.replace(/^www\./, '');
+    let urlParts;
+    try {
+      urlParts = new URL(data.url);
+    } catch (e) {
+      console.error("Invalid URL:", data.url);
+      urlParts = { hostname: "unknown" };
+    }
+    const domain = urlParts.hostname ? urlParts.hostname.replace(/^www\./, '') : "unknown";
     const baseFilename = `${domain}_${timestamp}`;
     
     // Initialize hash variable
@@ -489,8 +591,20 @@ async function handleSaveData(data) {
     let mediaSuccess = true;
     let mediaType = 'image';
     if (data.imageUrl) {
+      // Check if this is a Pixiv URL
+      const isPixivUrl = data.imageUrl.includes('pximg.net');
+      
       // Extract file extension or default to jpg
-      const extension = data.imageUrl.split('.').pop().split('?')[0] || 'jpg';
+      let extension = data.imageUrl.split('.').pop().split('?')[0] || 'jpg';
+      
+      // For Pixiv URLs with _p0, get the extension from the filename
+      if (isPixivUrl && data.imageUrl.includes('_p0')) {
+        const match = data.imageUrl.match(/_p0\.([^.?]+)/);
+        if (match && match[1]) {
+          extension = match[1];
+        }
+      }
+      
       const mediaResult = await downloadMedia(data.imageUrl, `${baseFilename}.${extension}`);
       mediaSuccess = !!mediaResult;
       mediaType = mediaResult || 'image';

@@ -35,9 +35,11 @@ window.TagSaver.TwitterExtractor = (function() {
     extractImageUrl: function() {
       // Get the main image if present
       const tweetImage = document.querySelector('article[data-testid="tweet"] img[src*="/media/"]');
-      tweetImage.src = this.formatTwitterMediaUrl(tweetImage.src);
-      console.log("[DEBUG] ",tweetImage.src);
-      return tweetImage ? tweetImage.src : null;
+      if (!tweetImage) return null;
+      
+      const formattedUrl = this.formatTwitterMediaUrl(tweetImage.src);
+      console.log("[DEBUG] Twitter image URL extracted:", formattedUrl);
+      return formattedUrl;
     },
 
     /**
@@ -50,32 +52,53 @@ window.TagSaver.TwitterExtractor = (function() {
         article[data-testid="tweet"] img[src*="/media/"], 
         article[data-testid="tweet"] video[poster*="twimg.com/"]
       `);
+      
+      // Format each image URL before processing
       mediaElements.forEach(element => {
-        if (element.tagName === 'IMG') element.src = this.formatTwitterMediaUrl(element.src);
+        if (element.tagName === 'IMG') {
+          const originalSrc = element.src;
+          element.src = this.formatTwitterMediaUrl(originalSrc);
+          console.log("[DEBUG] Gallery image formatted:", originalSrc, "→", element.src);
+        }
       });
+      
       return mediaElements;
     },
 
+    /**
+     * Format Twitter media URL to include proper extension
+     * @param {string} originalUrl - Original URL from Twitter
+     * @returns {string} - Properly formatted URL with extension
+     */
     formatTwitterMediaUrl(originalUrl) {
-      const url = new URL(originalUrl);
-      const pathParts = url.pathname.split('/');
-      let mediaId = pathParts[pathParts.length - 1]; // e.g., "GpjzPS-bEAAJ9LW" or "GpjzPS-bEAAJ9LW.jpg"
-    
-      const knownExtensions = ['jpg', 'png', 'webp', 'gif'];
-    
-      // Check if mediaId already ends with a known extension
-      const hasExtension = knownExtensions.some(ext => mediaId.toLowerCase().endsWith(`.${ext}`));
-    
-      let finalUrl;
-      if (hasExtension) {
-        finalUrl = `https://${url.host}/media/${mediaId}`;
-      } else {
-        const format = url.searchParams.get('format') || 'jpg'; // default to jpg
-        finalUrl = `https://${url.host}/media/${mediaId}.${format}`;
+      try {
+        const url = new URL(originalUrl);
+        const pathParts = url.pathname.split('/');
+        let mediaId = pathParts[pathParts.length - 1]; // e.g., "GpjzPS-bEAAJ9LW" or "GpjzPS-bEAAJ9LW.jpg"
+        
+        // First, clean up the mediaId by removing any query parameters
+        mediaId = mediaId.split('?')[0];
+        
+        const knownExtensions = ['jpg', 'png', 'webp', 'gif'];
+        
+        // Check if mediaId already ends with a known extension
+        const hasExtension = knownExtensions.some(ext => mediaId.toLowerCase().endsWith(`.${ext}`));
+        
+        // Get format from URL parameters or default to jpg
+        const format = url.searchParams.get('format') || 'jpg';
+        
+        let finalUrl;
+        if (hasExtension) {
+          finalUrl = `https://${url.host}/media/${mediaId}`;
+        } else {
+          finalUrl = `https://${url.host}/media/${mediaId}.${format}`;
+        }
+        
+        return finalUrl;
+      } catch (error) {
+        console.error("Error formatting Twitter URL:", error, originalUrl);
+        return originalUrl; // Return original on error
       }
-    
-      console.log("[DEBUG] ", finalUrl);
-      return finalUrl;
     }
   };
 })();

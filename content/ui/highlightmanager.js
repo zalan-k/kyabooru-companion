@@ -29,23 +29,6 @@ window.TagSaver.UI.HighlightManager = (function() {
           outline-offset: -1px;
           box-shadow: 0 0 8px #ff5722;
         }
-        
-        .ts-saved-image-highlight::after {
-          content: "★";
-          position: absolute;
-          top: 5px;
-          right: 5px;
-          background: #ff5722;
-          color: white;
-          width: 20px;
-          height: 20px;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 14px;
-          z-index: 99999;
-        }
       `;
       
       styleElement = window.TagSaver.UI.Styles.injectStyles(styles);

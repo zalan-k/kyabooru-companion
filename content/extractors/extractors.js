@@ -7,7 +7,11 @@ window.TagSaver.Extractors = (function() {
   const extractors = [
     window.TagSaver.TwitterExtractor,
     window.TagSaver.DanbooruExtractor, 
-    window.TagSaver.GelbooruExtractor
+    window.TagSaver.GelbooruExtractor,
+    window.TagSaver.Rule34Extractor,
+    window.TagSaver.Rule34PahealExtractor,
+    window.TagSaver.HentaiFoundryExtractor,
+    window.TagSaver.PixivExtractor
   ];
 
   /**

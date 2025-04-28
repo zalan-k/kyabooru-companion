@@ -47,6 +47,10 @@
         "content/extractors/twitter.js",
         "content/extractors/danbooru.js",
         "content/extractors/gelbooru.js",
+        "content/extractors/rule34.js",
+        "content/extractors/rule34paheal.js",
+        "content/extractors/hentaifoundry.js",
+        "content/extractors/pixiv.js",
         "content/extractors/extractors.js",
 
         "content/utils/hash.js",
