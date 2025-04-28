@@ -32,6 +32,14 @@ window.TagSaver.UI.Overlay = (function() {
     }
   }
 
+function positionImagePreview(previewElement, overlayContent) {
+  if (!previewElement || !overlayContent) return;
+  
+  const overlayRect = overlayContent.getBoundingClientRect();
+  previewElement.style.bottom = `${window.innerHeight - overlayRect.top + 10}px`;
+  previewElement.style.left = `${overlayRect.left + (overlayRect.width/2) - (previewElement.offsetWidth/2)}px`;
+}
+
 /**
  * Create and show the tag input overlay
  * @param {Object} options - Overlay options
@@ -73,42 +81,84 @@ function createOverlay(options = {}) {
     const imagePreview = document.createElement('div');
     imagePreview.className = 'ts-floating-image-preview';
     
-    if (mediaType === 'video') {
-      // Video placeholder
+    if (mediaType === 'video' || mediaType === 'gif') {
+      // First show placeholder while loading
       imagePreview.innerHTML = `
-        <div class="media-placeholder video-placeholder">
-          <div class="media-icon">🎬</div>
-          <div class="media-text">Video</div>
+        <div class="media-placeholder ${mediaType}-placeholder">
+          <div class="media-icon">${mediaType === 'video' ? '🎬' : 'GIF'}</div>
+          <div class="media-text">${mediaType === 'video' ? 'Loading Video Preview...' : 'Loading GIF Preview...'}</div>
         </div>
       `;
-    } else if (mediaType === 'gif') {
-      // GIF placeholder
-      imagePreview.innerHTML = `
-        <div class="media-placeholder gif-placeholder">
-          <div class="media-icon">GIF</div>
-          <div class="media-text">Animated Image</div>
-        </div>
-      `;
+      
+      // Position placeholder immediately
+      requestAnimationFrame(() => {
+        positionImagePreview(imagePreview, overlayContent);
+        imagePreviewElement.style.opacity = '1';
+      });
+      
+      // Try to extract first frame
+      try {
+        window.TagSaver.Hash.extractVideoFirstFrame(imageUrl)
+          .then(result => {
+            // Only proceed if preview still exists
+            if (imagePreviewElement && document.body.contains(imagePreviewElement)) {
+              imagePreview.innerHTML = `<img src="${result.dataUrl}" alt="${mediaType} preview">`;
+              // No need to reposition - already positioned with placeholder
+            }
+          })
+          .catch(error => {
+            console.error(`Failed to extract ${mediaType} frame:`, error);
+            // Placeholder already showing, no need to update
+          });
+      } catch (error) {
+        console.error(`Error setting up ${mediaType} preview:`, error);
+        // Placeholder already showing, no need to update
+      }
     } else {
       // Regular image
       imagePreview.innerHTML = `<img src="${imageUrl}" alt="Image to be saved">`;
+      
+      // Position after load or after timeout
+      const img = imagePreview.querySelector('img');
+      let positioned = false;
+      
+      if (img) {
+        // Set up load event
+        img.onload = () => {
+          if (!positioned) {
+            positioned = true;
+            positionImagePreview(imagePreview, overlayContent);
+            imagePreviewElement.style.opacity = '1';
+          }
+        };
+        
+        // Set up error handler
+        img.onerror = () => {
+          if (!positioned) {
+            positioned = true;
+            console.error("Failed to load image preview");
+            positionImagePreview(imagePreview, overlayContent);
+            imagePreviewElement.style.opacity = '1';
+          }
+        };
+        
+        // Fallback timeout in case neither event fires
+        setTimeout(() => {
+          if (!positioned) {
+            positioned = true;
+            positionImagePreview(imagePreview, overlayContent);
+            imagePreviewElement.style.opacity = '1';
+          }
+        }, 3000);
+      } else {
+        // Fallback if img element not found
+        positionImagePreview(imagePreview, overlayContent);
+        imagePreviewElement.style.opacity = '1';
+      }
     }
-
-    imagePreview.style.opacity = '0'; // Start hidden
+    
     document.body.appendChild(imagePreview);
     imagePreviewElement = imagePreview;
-    const img = imagePreview.querySelector('img');
-    img.onload = () => {
-      requestAnimationFrame(() => {
-        const overlayContent = document.querySelector('.overlay-content');
-        if (overlayContent) {
-          const overlayRect = overlayContent.getBoundingClientRect();
-          imagePreviewElement.style.bottom = `${window.innerHeight - overlayRect.top + 10}px`;
-          imagePreviewElement.style.left = `${overlayRect.left + (overlayRect.width/2) - (imagePreview.offsetWidth/2)}px`;
-          imagePreviewElement.style.opacity = '1'; // Fade in after positioning
-        }
-      });
-    };
   }
 
   overlay.innerHTML = `

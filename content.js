@@ -207,6 +207,10 @@ function handleSave(tags, poolData = null) {
         response.originalRecord,
         response.exactMatch || false
       );
+      const message = response.exactMatch 
+      ? "Duplicate detected - did not save."
+      : "Similar image detected - did not save.";
+      UI.Toast.showError(message, 3000);
     } else {
       UI.Toast.showError("Error saving content");
       isOverlayOpen = false;

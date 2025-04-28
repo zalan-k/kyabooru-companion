@@ -139,7 +139,7 @@ function startImageSelectionMode(onSelect) {
   activateImageSelection();
   
   // Show toast notification
-  Toast.showToast('Image selection mode active. Click on any image to select it.', false);
+  Toast.showToast('Image selection mode active. Click on any image to select it.', false, 1000);
   
   // Handle save button
   toolbar.querySelector('.save-btn').addEventListener('click', () => {

@@ -345,7 +345,7 @@ function removeStyles(styleElement) {
     
     .ts-selection-toolbar {
       position: fixed;
-      bottom: 20px;
+      bottom: 70px;
       right: 20px;
       background-color: rgba(33, 33, 33, 0.9);
       color: white;
@@ -414,6 +414,8 @@ function removeStyles(styleElement) {
       z-index: 9999999999;
       font-size: 14px;
       animation: ts-slideIn 0.3s ease-out;
+      opacity: 1;
+      transition: opacity 0.2s ease-out;
     }
     
     .ts-toast.error {

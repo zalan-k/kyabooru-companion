@@ -20,6 +20,21 @@ window.TagSaver.Hash = (function() {
       return hashCache[imageUrl];
     }
     
+    if (/\.(mp4|webm|mov|gif)/i.test(imageUrl)) {
+      try {
+        console.log(`Computing hash from first frame of video: ${imageUrl.substring(0, 50)}...`);
+        const result = await extractVideoFirstFrame(imageUrl);
+        
+        // Cache the hash
+        hashCache[imageUrl] = result.hash;
+        
+        return result.hash;
+      } catch (error) {
+        console.error("Error computing video hash:", error);
+        throw error;
+      }
+    }
+
     return new Promise((resolve, reject) => {
       console.log(`Computing hash for ${imageUrl.substring(0, 50)}...`);
       
@@ -181,13 +196,95 @@ window.TagSaver.Hash = (function() {
     return distance <= threshold;
   }
   
+  /**
+   * Extract first frame from a video and calculate hash
+   * @param {string} videoUrl - URL of the video
+   * @returns {Promise<Object>} - Object with dataUrl and hash
+   */
+  async function extractVideoFirstFrame(videoUrl) {
+    return new Promise((resolve, reject) => {
+      const video = document.createElement('video');
+      video.crossOrigin = 'anonymous';
+      
+      // Set a timeout to avoid hanging on loading
+      const timeoutId = setTimeout(() => {
+        reject(new Error('Video load timeout'));
+      }, 10000);
+      
+      // Add event listeners
+      video.onloadedmetadata = () => {
+        // Once metadata is loaded, seek to first frame
+        video.currentTime = 0.1; // Slightly after start to ensure frame is loaded
+      };
+      
+      video.onseeked = () => {
+        clearTimeout(timeoutId);
+        
+        // Create canvas and draw frame
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        // Get data URL for preview
+        const dataUrl = canvas.toDataURL('image/jpeg');
+        
+        // Calculate hash using the same algorithm as for images
+        const smallCanvas = document.createElement('canvas');
+        const size = 8;
+        smallCanvas.width = size;
+        smallCanvas.height = size;
+        const smallCtx = smallCanvas.getContext('2d');
+        smallCtx.drawImage(video, 0, 0, size, size);
+        
+        const imageData = smallCtx.getImageData(0, 0, size, size).data;
+        let sum = 0;
+        const grayPixels = [];
+        
+        for (let i = 0; i < imageData.length; i += 4) {
+          const gray = Math.floor(0.299 * imageData[i] + 0.587 * imageData[i+1] + 0.114 * imageData[i+2]);
+          grayPixels.push(gray);
+          sum += gray;
+        }
+        
+        const avg = sum / grayPixels.length;
+        
+        let hashString = '';
+        for (let i = 0; i < grayPixels.length; i++) {
+          hashString += grayPixels[i] >= avg ? '1' : '0';
+        }
+        
+        // Convert binary to hex
+        const hashHex = window.TagSaver.Hash.binaryToHex(hashString);
+        
+        // Clean up
+        video.src = '';
+        
+        resolve({
+          dataUrl: dataUrl,
+          hash: hashHex
+        });
+      };
+      
+      video.onerror = (e) => {
+        clearTimeout(timeoutId);
+        reject(new Error(`Error loading video: ${e.message}`));
+      };
+      
+      // Load the video
+      video.src = videoUrl;
+      video.load();
+    });
+  }
+
   // Public API
   return {
     computeAverageHash,
     hammingDistance,
     areSimilar,
-    // Export helper functions for debugging
     hexToBinary,
-    binaryToHex
+    binaryToHex,
+    extractVideoFirstFrame
   };
 })();

@@ -25,8 +25,9 @@ window.TagSaver.UI.HighlightManager = (function() {
       const styles = `
         .ts-saved-image-highlight {
           position: relative;
-          outline: 3px solid #ff5722 !important;
+          outline: 2px solid #ff5722 !important;
           outline-offset: -1px;
+          box-shadow: 0 0 8px #ff5722;
         }
         
         .ts-saved-image-highlight::after {

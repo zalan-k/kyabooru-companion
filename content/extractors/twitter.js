@@ -34,7 +34,9 @@ window.TagSaver.TwitterExtractor = (function() {
      */
     extractImageUrl: function() {
       // Get the main image if present
-      const tweetImage = document.querySelector('article img[src*="https"]');
+      const tweetImage = document.querySelector('article[data-testid="tweet"] img[src*="/media/"]');
+      tweetImage.src = this.formatTwitterMediaUrl(tweetImage.src);
+      console.log("[DEBUG] ",tweetImage.src);
       return tweetImage ? tweetImage.src : null;
     },
 
@@ -44,7 +46,36 @@ window.TagSaver.TwitterExtractor = (function() {
      */
     getGalleryImages() {
       // For Twitter/X, look for images in the timeline
-      return document.querySelectorAll('article img[src*="https"][width="100%"]');
+      const mediaElements = document.querySelectorAll(`
+        article[data-testid="tweet"] img[src*="/media/"], 
+        article[data-testid="tweet"] video[poster*="twimg.com/"]
+      `);
+      mediaElements.forEach(element => {
+        if (element.tagName === 'IMG') element.src = this.formatTwitterMediaUrl(element.src);
+      });
+      return mediaElements;
+    },
+
+    formatTwitterMediaUrl(originalUrl) {
+      const url = new URL(originalUrl);
+      const pathParts = url.pathname.split('/');
+      let mediaId = pathParts[pathParts.length - 1]; // e.g., "GpjzPS-bEAAJ9LW" or "GpjzPS-bEAAJ9LW.jpg"
+    
+      const knownExtensions = ['jpg', 'png', 'webp', 'gif'];
+    
+      // Check if mediaId already ends with a known extension
+      const hasExtension = knownExtensions.some(ext => mediaId.toLowerCase().endsWith(`.${ext}`));
+    
+      let finalUrl;
+      if (hasExtension) {
+        finalUrl = `https://${url.host}/media/${mediaId}`;
+      } else {
+        const format = url.searchParams.get('format') || 'jpg'; // default to jpg
+        finalUrl = `https://${url.host}/media/${mediaId}.${format}`;
+      }
+    
+      console.log("[DEBUG] ", finalUrl);
+      return finalUrl;
     }
   };
 })();

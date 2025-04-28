@@ -35,8 +35,12 @@ function showToast(message, isError = false, duration = 3000) {
   
   // Automatically remove after duration
   setTimeout(() => {
-    toast.style.opacity = 0;
-    setTimeout(() => toast.remove(), 300);
+    toast.style.opacity = '0'; // This will trigger the transition
+    
+    // Remove after transition completes
+    setTimeout(() => {
+      toast.remove();
+    }, 200); // Match this with the transition time (0.1s = 100ms)
   }, duration);
   
   return toast;
