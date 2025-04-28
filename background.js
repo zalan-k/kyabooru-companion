@@ -603,7 +603,12 @@ async function processAllTabs() {
           url: tab.url,
           tags: content.tags,
           imageUrl: content.imageUrl,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          // sender: {
+          //   tab: {
+          //     id: tab.id
+          //   }
+          // }
         });
         
         if (result.success) {
@@ -701,13 +706,13 @@ function setupContextMenu() {
   browser.contextMenus.create({
     id: "export-database",
     title: "Export Tag Database",
-    contexts: ["browser_action"]
+    contexts: ["action"]
   });
 
   browser.contextMenus.create({
     id: "process-all-tabs",
     title: "Process All Open Booru Tabs",
-    contexts: ["browser_action"]
+    contexts: ["action"]
   });
 }
 
@@ -865,10 +870,13 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const transaction = db.transaction([TAG_STORE], 'readonly');
       const store = transaction.objectStore(TAG_STORE);
       const request = store.getAll();
+      console.log("Transaction state:", transaction.mode);
+      console.log("Store name:", store.name);
       
       request.onsuccess = () => {
+        console.log("[DEBUG] Total records:", request.result.length); // 🟢 Check 1
         const records = request.result.filter(record => record.imageHash);
-        console.log(`Found ${records.length} records with imageHash to compare against`);
+        console.log("[DEBUG] Records with imageHash:", records.length); // 🟢 Check 2
         
         let exists = false;
         
