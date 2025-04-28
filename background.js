@@ -157,8 +157,7 @@ async function saveToDatabase(data) {
         tagText: tagTexts, // Add this new field for searching
         imageUrl: data.imageUrl,
         timestamp: data.timestamp,
-        // Add pool hash if provided
-        poolHash: data.poolHash || null
+        imageHash: data.imageHash || null
       });
       
       request.onsuccess = () => resolve(true);
@@ -921,6 +920,36 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // Keep the message channel open for async response
   }
 
+});
+
+browser.runtime.onInstalled.addListener(async (details) => {
+  console.log("Extension installed or updated:", details.reason);
+  
+  // Only initialize settings once at install time
+  if (details.reason === 'install') {
+    try {
+      // Check if settings exist
+      const result = await browser.storage.local.get('settings');
+      
+      // If no settings exist, initialize with defaults
+      if (!result.settings || Object.keys(result.settings).length === 0) {
+        // Import the default settings from options.js
+        const defaultSettings = {
+          saveFolder: 'TagSaver',
+          autoDetect: true,
+          notificationsEnabled: true,
+          duplicateDetection: true,
+          similarityThreshold: 10
+        };
+        
+        // Save defaults to storage
+        await browser.storage.local.set({ settings: defaultSettings });
+        console.log("Default settings initialized:", defaultSettings);
+      }
+    } catch (error) {
+      console.error("Error initializing settings:", error);
+    }
+  }
 });
 
 // Initialize

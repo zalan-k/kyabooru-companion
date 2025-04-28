@@ -40,7 +40,7 @@ function init() {
     const isSupportedSite = window.TagSaver.Extractors && window.TagSaver.Extractors.isSupportedSite && window.TagSaver.Extractors.isSupportedSite(currentUrl);
     
     // Only start highlight manager on supported sites when enabled
-    if (isSupportedSite && settings.duplicateDetection) {
+    if (isSupportedSite && (settings.duplicateDetection !== false)) {
       if (window.TagSaver.UI.HighlightManager) window.TagSaver.UI.HighlightManager.startMonitoring();
     }
     
