@@ -160,6 +160,60 @@ function removeStyles(styleElement) {
       color: white;
     }
     
+    .tag-content {
+      cursor: pointer;
+      user-select: none;
+    }
+    
+    .tag-content:hover {
+      opacity: 0.8;
+    }
+    
+    .tag-category-dropdown {
+      position: fixed;
+      background: rgba(45, 45, 45, 0.95);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      z-index: 999999999;
+      min-width: 120px;
+      backdrop-filter: blur(8px);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      overflow: hidden;
+    }
+    
+    .tag-category-option {
+      padding: 8px 12px;
+      cursor: pointer;
+      color: white;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: background 0.15s ease;
+    }
+    
+    .tag-category-option:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+    
+    .tag-category-option.selected {
+      background: rgba(255, 255, 255, 0.15);
+    }
+    
+    .category-color {
+      width: 12px;
+      height: 12px;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+    
+    .selected-mark {
+      margin-left: auto;
+      opacity: 0.7;
+      font-size: 11px;
+    }
+    
     #tag-input {
       width: 100%;
       padding: 12px 16px;

@@ -153,9 +153,9 @@ window.TagSaver.TwitterExtractor = (function() {
       hashtagElements.forEach(el => {
         const tag = el.textContent.trim();
         if (tag.startsWith('#')) {
-          hashtags.push(`general:${tag.substring(1)}`);
+          hashtags.push(`meta:${tag.substring(1)}`);
         } else {
-          hashtags.push(`general:${tag}`);
+          hashtags.push(`meta:${tag}`);
         }
       });
     }
@@ -165,8 +165,8 @@ window.TagSaver.TwitterExtractor = (function() {
       const tweetText = tweetElement.textContent || '';
       const extractedTags = tweetText.match(/#\w+/g) || [];
       
-      // Remove # symbol and add 'general:' prefix
-      hashtags = extractedTags.map(tag => `general:${tag.substring(1)}`);
+      // Remove # symbol and add 'meta:' prefix
+      hashtags = extractedTags.map(tag => `meta:${tag.substring(1)}`);
     }
     
     return hashtags;
