@@ -7,8 +7,11 @@ function saveOptions(e) {
       autoDetect: document.getElementById('autoDetect').checked,
       notificationsEnabled: document.getElementById('notificationsEnabled').checked,
       duplicateDetection: document.getElementById('duplicateDetection').checked,
-      similarityThreshold: parseInt(document.getElementById('similarityThreshold').value)
+      similarityThreshold: parseInt(document.getElementById('similarityThreshold').value),
+      useLocalServer: document.getElementById('useLocalServer').checked  // Add this line
     };
+    
+    console.log('Saving settings:', settings); // Debug log
     
     browser.storage.local.set({
       settings: settings
@@ -37,17 +40,22 @@ function saveOptions(e) {
       autoDetect: true,
       notificationsEnabled: true,
       duplicateDetection: true,
-      similarityThreshold: 10
+      similarityThreshold: 10,
+      useLocalServer: true  // Add this line
     };
     
     browser.storage.local.get('settings').then((result) => {
       const settings = result.settings || defaultSettings;
+      
+      console.log('Loading settings:', settings); // Debug log
       
       document.getElementById('saveFolder').value = settings.saveFolder || defaultSettings.saveFolder;
       document.getElementById('autoDetect').checked = settings.autoDetect !== undefined ? settings.autoDetect : defaultSettings.autoDetect;
       document.getElementById('notificationsEnabled').checked = settings.notificationsEnabled !== undefined ? settings.notificationsEnabled : defaultSettings.notificationsEnabled;
       document.getElementById('duplicateDetection').checked = settings.duplicateDetection !== undefined ? settings.duplicateDetection : defaultSettings.duplicateDetection;
       document.getElementById('similarityThreshold').value = settings.similarityThreshold !== undefined ? settings.similarityThreshold : defaultSettings.similarityThreshold;
+      document.getElementById('useLocalServer').checked = settings.useLocalServer !== undefined ? settings.useLocalServer : defaultSettings.useLocalServer;  // Add this line
+      
       document.getElementById('thresholdValue').textContent = document.getElementById('similarityThreshold').value;
       document.getElementById('similarityThreshold').addEventListener('input', function() {
         document.getElementById('thresholdValue').textContent = this.value;

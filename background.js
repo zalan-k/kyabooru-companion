@@ -3,6 +3,7 @@ let db;
 const DB_NAME = 'tagSaverDB';
 const DB_VERSION = 1;
 const TAG_STORE = 'tags';
+const SERVER_URL = 'http://localhost:3737';
 
 // Initialize the database
 function initDB() {
@@ -40,7 +41,36 @@ function initDB() {
   };
 }
 
+// Export database
 async function exportDatabase() {
+  if (settings.useLocalServer) {
+    try {
+      const serverAvailable = await checkServerConnection();
+      if (serverAvailable) {
+        const data = await apiRequest('/api/export');
+        const json = JSON.stringify(data, null, 2);
+        const blob = new Blob([json], {type: 'application/json'});
+        const url = URL.createObjectURL(blob);
+        
+        await browser.downloads.download({
+          url: url,
+          filename: `${settings.saveFolder}/tag_database_export_${Date.now()}.json`,
+          saveAs: true
+        });
+        
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        return true;
+      }
+    } catch (error) {
+      console.error("Server export failed:", error);
+    }
+  }
+  
+  // Fallback to original implementation
+  return await exportDatabaseIndexedDB();
+}
+
+async function exportDatabaseIndexedDB() {
   return new Promise((resolve, reject) => {
     try {
       const transaction = db.transaction([TAG_STORE], 'readonly');
@@ -119,7 +149,9 @@ async function importDatabase(jsonData) {
 let settings = {
   saveFolder: "TagSaver",
   autoDetect: true,
-  notificationsEnabled: true
+  notificationsEnabled: true,
+  useLocalServer: true,
+  serverUrl: SERVER_URL
 };
 
 // Load settings from storage
@@ -134,8 +166,117 @@ async function loadSettings() {
   }
 }
 
-// Save data to IndexedDB
+// Check if server is available
+async function checkServerConnection() {
+  try {
+    const response = await fetch(`${settings.serverUrl}/api/status`);
+    if (response.ok) {
+      const status = await response.json();
+      console.log('Connected to Tag Saver Server:', status);
+      return true;
+    }
+  } catch (error) {
+    console.log('Tag Saver Server not available, using browser storage');
+  }
+  return false;
+}
+
+// Updated apiRequest to handle 409 errors specially
+async function apiRequest(endpoint, options = {}) {
+  const url = `${settings.serverUrl}${endpoint}`;
+  const defaultOptions = {
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  };
+  
+  try {
+    const response = await fetch(url, { ...defaultOptions, ...options });
+    
+    // Handle 409 (duplicate) specially - don't throw, return the error data
+    if (response.status === 409) {
+      const errorData = await response.json();
+      return { 
+        error: true, 
+        status: 409, 
+        data: errorData 
+      };
+    }
+    
+    if (!response.ok) {
+      throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error(`API Error (${endpoint}):`, error);
+    throw error;
+  }
+}
+
+// Updated saveToServer function
+async function saveToServer(data) {
+  try {
+    const payload = {
+      url: data.url,
+      tags: data.tags,
+      imageUrl: data.imageUrl,
+      imageHash: data.imageHash,
+      poolId: data.poolId,
+      poolIndex: data.poolIndex,
+      mediaType: detectMediaType(data.imageUrl)
+    };
+    
+    const result = await apiRequest('/api/images', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+    
+    // Check if it's a 409 duplicate error
+    if (result.error && result.status === 409) {
+      return {
+        success: false,
+        duplicateFound: true,
+        originalRecord: result.data.duplicate
+      };
+    }
+    
+    console.log('Data saved to server successfully:', result);
+    return { success: true, serverId: result.imageId };
+  } catch (error) {
+    throw error;
+  }
+}
+
+// Save data to server or fallback to IndexedDB
 async function saveToDatabase(data) {
+  if (settings.useLocalServer) {
+    try {
+      const serverAvailable = await checkServerConnection();
+      if (serverAvailable) {
+        return await saveToServer(data);
+      }
+    } catch (error) {
+      console.error("Server save failed, falling back to browser storage:", error);
+    }
+  }
+  
+  // Fallback to original IndexedDB implementation
+  return await saveToIndexedDB(data);
+}
+
+// Utility function to detect media type
+function detectMediaType(url) {
+  if (!url) return 'image';
+  
+  const extension = url.split('.').pop().toLowerCase().split('?')[0];
+  if (['gif'].includes(extension)) return 'gif';
+  if (['mp4', 'webm', 'mov'].includes(extension)) return 'video';
+  return 'image';
+}
+
+// Save data to IndexedDB
+async function saveToIndexedDB(data) {
   // Process tags for better search
   const tagTexts = data.tags.map(tag => {
     // Store both the full tag and the name part for better searching
@@ -191,8 +332,31 @@ async function detectContentType(url) {
   }
 }
 
-// Add function to check for duplicates based on hash
+// Check for duplicate by hash
 async function checkForDuplicateImage(imageHash, similarityThreshold = 10) {
+  if (settings.useLocalServer && imageHash) {
+    try {
+      const serverAvailable = await checkServerConnection();
+      if (serverAvailable) {
+        const result = await apiRequest(`/api/images/check-duplicate/${imageHash}`);
+        return {
+          isDuplicate: result.exists,
+          exactMatch: result.exists,
+          originalRecord: result.duplicate
+        };
+      }
+    } catch (error) {
+      console.error("Server duplicate check failed:", error);
+    }
+  }
+  
+  // Fallback to original implementation
+  return await checkForDuplicateImageIndexedDB(imageHash, similarityThreshold);
+}
+
+
+// Add function to check for duplicates based on hash
+async function checkForDuplicateImageIndexedDB(imageHash, similarityThreshold = 10) {
   return new Promise((resolve, reject) => {
     try {
       if (!imageHash) {
@@ -391,8 +555,24 @@ async function downloadMedia(mediaUrl, filename) {
   }
 }
 
+async function searchTags(prefix) {
+  if (settings.useLocalServer) {
+    try {
+      const serverAvailable = await checkServerConnection();
+      if (serverAvailable) {
+        const results = await apiRequest(`/api/tags/search?q=${encodeURIComponent(prefix)}&limit=30`);
+        return results;
+      }
+    } catch (error) {
+      console.error("Server search failed, falling back to browser storage:", error);
+    }
+  }
+  
+  // Fallback to original IndexedDB search
+  return await searchTagsIndexedDB(prefix);
+}
 
-function searchTags(prefix) {
+function searchTagsIndexedDB(prefix) {
   return new Promise((resolve, reject) => {
     try {
       const transaction = db.transaction([TAG_STORE], 'readonly');
@@ -829,7 +1009,25 @@ function setupContextMenu() {
   });
 }
 
+// Get pool highest index
 async function getPoolHighestIndex(poolId) {
+  if (settings.useLocalServer) {
+    try {
+      const serverAvailable = await checkServerConnection();
+      if (serverAvailable) {
+        const result = await apiRequest(`/api/pools/${poolId}/highest-index`);
+        return result.highestIndex;
+      }
+    } catch (error) {
+      console.error("Server pool query failed:", error);
+    }
+  }
+  
+  // Fallback to original implementation
+  return await getPoolHighestIndexIndexedDB(poolId);
+}
+
+async function getPoolHighestIndexIndexedDB(poolId) {
   return new Promise((resolve, reject) => {
     try {
       if (!db) {
@@ -969,71 +1167,11 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
   else if (message.action === "check-image-hash") {
-    try {
-      // Validate the hash parameter exists
-      if (!message.hash) {
-        console.error("Missing hash parameter in check-image-hash request");
-        sendResponse({ exists: false, error: "Missing hash parameter" });
-        return true;
-      }
-      
-      const hash = message.hash;
-      console.log(`Background: Processing check-image-hash for ${hash}`);
-      
-      const transaction = db.transaction([TAG_STORE], 'readonly');
-      const store = transaction.objectStore(TAG_STORE);
-      const request = store.getAll();
-      console.log("Transaction state:", transaction.mode);
-      console.log("Store name:", store.name);
-      
-      request.onsuccess = () => {
-        console.log("[DEBUG] Total records:", request.result.length); // 🟢 Check 1
-        const records = request.result.filter(record => record.imageHash);
-        console.log("[DEBUG] Records with imageHash:", records.length); // 🟢 Check 2
-        
-        let exists = false;
-        
-        // Check each record for similar hash
-        for (const record of records) {
-          if (record.imageHash === hash) {
-            // Exact match
-            exists = true;
-            console.log(`Background: Found exact match for ${hash}`);
-            break;
-          }
-          
-          // For similarity, use the threshold from settings
-          const similarityThreshold = settings.similarityThreshold || 10;
-          try {
-            const distance = calculateHammingDistance(hash, record.imageHash);
-            console.log(`Distance between ${hash} and ${record.imageHash}: ${distance}`);
-            
-            if (distance <= similarityThreshold) {
-              exists = true;
-              console.log(`Background: Found similar match for ${hash}, distance: ${distance}`);
-              break;
-            }
-          } catch (error) {
-            console.error("Error comparing hashes:", error);
-          }
-        }
-        
-        console.log(`Background: Responding with exists: ${exists}`);
-        sendResponse({ exists: exists });
-      };
-      
-      request.onerror = (event) => {
-        console.error("Error checking hash:", event.target.error);
-        sendResponse({ exists: false, error: event.target.error.message });
-      };
-    } catch (error) {
-      console.error("Error in check-image-hash:", error);
-      sendResponse({ exists: false, error: error.message });
-    }
-    
-    return true; // Keep the message channel open for async response
+    checkForDuplicateImage(message.hash)
+      .then(result => sendResponse({ exists: result.isDuplicate }))
+      .catch(error => sendResponse({ exists: false, error: error.message }));
+    return true;
   }
-
 });
 
 browser.runtime.onInstalled.addListener(async (details) => {
@@ -1053,7 +1191,8 @@ browser.runtime.onInstalled.addListener(async (details) => {
           autoDetect: true,
           notificationsEnabled: true,
           duplicateDetection: true,
-          similarityThreshold: 10
+          similarityThreshold: 10,
+          useLocalServer: true
         };
         
         // Save defaults to storage

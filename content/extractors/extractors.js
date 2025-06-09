@@ -11,7 +11,8 @@ window.TagSaver.Extractors = (function() {
     window.TagSaver.Rule34Extractor,
     window.TagSaver.Rule34PahealExtractor,
     window.TagSaver.HentaiFoundryExtractor,
-    window.TagSaver.PixivExtractor
+    window.TagSaver.PixivExtractor,
+    window.TagSaver.GenericImageExtractor
   ];
 
   /**
