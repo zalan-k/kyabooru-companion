@@ -216,6 +216,8 @@ async function apiRequest(endpoint, options = {}) {
 
 // Updated saveToServer function
 async function saveToServer(data) {
+  const startTime = performance.now();
+  
   try {
     const payload = {
       url: data.url,
@@ -227,24 +229,42 @@ async function saveToServer(data) {
       mediaType: detectMediaType(data.imageUrl)
     };
     
-    const result = await apiRequest('/api/images', {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+    const response = await fetch(`${settings.serverUrl}/api/images`, {
       method: 'POST',
-      body: JSON.stringify(payload)
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal
     });
     
-    // Check if it's a 409 duplicate error
-    if (result.error && result.status === 409) {
+    clearTimeout(timeoutId);
+    
+    // Handle duplicate error
+    if (response.status === 409) {
+      const errorData = await response.json();
       return {
         success: false,
         duplicateFound: true,
-        originalRecord: result.data.duplicate
+        originalRecord: errorData.duplicate
       };
     }
     
-    console.log('Data saved to server successfully:', result);
+    if (!response.ok) {
+      throw new Error(`Server error: ${response.status}`);
+    }
+    
+    const result = await response.json();
+    const duration = performance.now() - startTime;
+    console.log(`✅ Server save: ${duration.toFixed(2)}ms`);
+    
     return { success: true, serverId: result.imageId };
   } catch (error) {
-    throw error;
+    console.error("❌ Server save failed:", error);
+    throw error; // This will trigger the fallback to IndexedDB
   }
 }
 
@@ -252,16 +272,14 @@ async function saveToServer(data) {
 async function saveToDatabase(data) {
   if (settings.useLocalServer) {
     try {
-      const serverAvailable = await checkServerConnection();
-      if (serverAvailable) {
-        return await saveToServer(data);
-      }
+      console.log("📤 Attempting server save...");
+      return await saveToServer(data);
     } catch (error) {
-      console.error("Server save failed, falling back to browser storage:", error);
+      console.error("Server failed, using browser storage:", error);
     }
   }
   
-  // Fallback to original IndexedDB implementation
+  console.log("📦 Using browser storage...");
   return await saveToIndexedDB(data);
 }
 
@@ -638,8 +656,9 @@ async function saveJSON(data, filename) {
 }
 
 // Handle data saving
-// Update the handleSaveData function in background.js to better handle duplicate detection
 async function handleSaveData(data) {
+  const startTime = performance.now();
+
   try {
     // Generate filenames
     const timestamp = new Date().getTime();
@@ -765,7 +784,9 @@ async function handleSaveData(data) {
     };
     
     // Save to database
+    const dbStartTime = performance.now();
     await saveToDatabase(dbData);
+    const dbTime = performance.now() - dbStartTime;
     
     // Save media if available
     let mediaSuccess = true;
@@ -805,7 +826,12 @@ async function handleSaveData(data) {
     };
     
     const jsonSuccess = await saveJSON(jsonData, `${baseFilename}.json`);
-    
+
+    const totalTime = performance.now() - startTime;
+    console.log(`📊 OPTIMIZED PERFORMANCE:
+      Database save: ${dbTime.toFixed(2)}ms
+      Total time: ${totalTime.toFixed(2)}ms`);
+
     return {
       success: true,
       mediaSuccess,

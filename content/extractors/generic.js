@@ -17,7 +17,8 @@ window.TagSaver.GenericImageExtractor = (function() {
   }
   
   function extractImageUrl() {
-    return [];
+    const img = document.querySelector('img');
+    return img ? img.src : null;
   }
 
   function getGalleryImages() {
