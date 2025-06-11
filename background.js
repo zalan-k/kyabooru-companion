@@ -226,7 +226,8 @@ async function saveToServer(data) {
       imageHash: data.imageHash,
       poolId: data.poolId,
       poolIndex: data.poolIndex,
-      mediaType: detectMediaType(data.imageUrl)
+      mediaType: detectMediaType(data.imageUrl),
+      similarityThreshold: settings.similarityThreshold || 10  // Add similarity threshold
     };
     
     const controller = new AbortController();
@@ -249,6 +250,7 @@ async function saveToServer(data) {
       return {
         success: false,
         duplicateFound: true,
+        exactMatch: errorData.exactMatch || false,  // Include exact match info
         originalRecord: errorData.duplicate
       };
     }
@@ -267,6 +269,7 @@ async function saveToServer(data) {
     throw error; // This will trigger the fallback to IndexedDB
   }
 }
+
 
 // Save data to server or fallback to IndexedDB
 async function saveToDatabase(data) {
@@ -356,10 +359,10 @@ async function checkForDuplicateImage(imageHash, similarityThreshold = 10) {
     try {
       const serverAvailable = await checkServerConnection();
       if (serverAvailable) {
-        const result = await apiRequest(`/api/images/check-duplicate/${imageHash}`);
+        const result = await apiRequest(`/api/images/check-duplicate/${imageHash}?threshold=${similarityThreshold}`);
         return {
           isDuplicate: result.exists,
-          exactMatch: result.exists,
+          exactMatch: result.exactMatch || false,
           originalRecord: result.duplicate
         };
       }
@@ -1193,8 +1196,9 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
   else if (message.action === "check-image-hash") {
-    checkForDuplicateImage(message.hash)
-      .then(result => sendResponse({ exists: result.isDuplicate }))
+    const threshold = settings.similarityThreshold || 10;
+    checkForDuplicateImage(message.hash, threshold)
+      .then(result => sendResponse({ exists: result.isDuplicate, exactMatch: result.exactMatch }))
       .catch(error => sendResponse({ exists: false, error: error.message }));
     return true;
   }
