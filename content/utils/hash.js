@@ -10,8 +10,8 @@ window.TagSaver.Hash = (function() {
   
   /**
    * Compute average hash (aHash) for an image
-   * @param {string} imageUrl - URL of the image
-   * @returns {Promise<string>} - Hash as hex string
+   * @param {string} imageUrl
+   * @returns {Promise<string>}
    */
   async function computeAverageHash(imageUrl) {
     // Check cache first
@@ -27,7 +27,6 @@ window.TagSaver.Hash = (function() {
         
         // Cache the hash
         hashCache[imageUrl] = result.hash;
-        
         return result.hash;
       } catch (error) {
         console.error("Error computing video hash:", error);
@@ -43,7 +42,7 @@ window.TagSaver.Hash = (function() {
       // Set timeout to avoid hanging on image load
       const timeoutId = setTimeout(() => {
         reject(new Error(`Image load timeout: ${imageUrl}`));
-      }, 10000); // 10 second timeout
+      }, 10000);
       
       img.onload = function() {
         clearTimeout(timeoutId);
@@ -51,7 +50,7 @@ window.TagSaver.Hash = (function() {
           // Create a small 8x8 canvas for the hash
           const canvas = document.createElement('canvas');
           const ctx = canvas.getContext('2d');
-          const size = 8;
+          const size = 16;
           
           canvas.width = size;
           canvas.height = size;
@@ -232,7 +231,7 @@ window.TagSaver.Hash = (function() {
         
         // Calculate hash using the same algorithm as for images
         const smallCanvas = document.createElement('canvas');
-        const size = 8;
+        const size = 16;
         smallCanvas.width = size;
         smallCanvas.height = size;
         const smallCtx = smallCanvas.getContext('2d');

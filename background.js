@@ -150,6 +150,7 @@ let settings = {
   saveFolder: "TagSaver",
   autoDetect: true,
   notificationsEnabled: true,
+  similarityThreshold: 10,
   useLocalServer: true,
   serverUrl: SERVER_URL
 };
