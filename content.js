@@ -198,19 +198,17 @@ function handleSave(tags, poolData = null) {
     }
   }).then(response => {
     if (response && response.success) {
-      UI.Toast.showSuccess("Content saved successfully!");
+      // Check for duplicate warning even on successful save
+      if (response.duplicateWarning && response.duplicateWarning.isDuplicate) {
+        const message = response.duplicateWarning.exactMatch 
+          ? "⚠️ Saved anyway - exact duplicate detected!"
+          : "⚠️ Saved anyway - similar image detected!";
+        UI.Toast.showWarning(message, 5000); // Longer duration for warnings
+      } else {
+        UI.Toast.showSuccess("Content saved successfully!");
+      }
       isOverlayOpen = false;
       overlayActivatedOnce = false;
-    } else if (response && response.duplicateFound) {
-      // Show duplicate warning in the overlay
-      UI.Overlay.showDuplicateWarning(
-        response.originalRecord,
-        response.exactMatch || false
-      );
-      const message = response.exactMatch 
-      ? "Duplicate detected - did not save."
-      : "Similar image detected - did not save.";
-      UI.Toast.showError(message, 3000);
     } else {
       UI.Toast.showError("Error saving content");
       isOverlayOpen = false;
@@ -237,7 +235,7 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     return Promise.resolve({success: true});
   }
-  
+
   if (message.action === "compute-image-hash") {
     // Handle hash computation - this needs to return a Promise
     window.TagSaver.Hash.computeAverageHash(message.imageUrl)

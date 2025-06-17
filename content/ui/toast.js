@@ -64,10 +64,39 @@ function showError(message, duration = 3000) {
   return showToast(message, true, duration);
 }
 
+/**
+ * Show a warning toast (orange color)
+ * @param {string} message - Warning message
+ * @param {number} duration - Duration in ms
+ */
+function showWarning(message, duration = 3000) {
+  // Ensure styles are injected
+  initToast();
+  
+  // Create toast element with warning class
+  const toast = document.createElement('div');
+  toast.className = 'ts-toast warning';
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  
+  // Automatically remove after duration
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    
+    // Remove after transition completes
+    setTimeout(() => {
+      toast.remove();
+    }, 200); // Match transition time
+  }, duration);
+  
+  return toast;
+}
+
 return {
   initToast,
   showToast,
   showSuccess,
-  showError
+  showError,
+  showWarning
 };
 })();

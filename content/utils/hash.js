@@ -231,7 +231,7 @@ window.TagSaver.Hash = (function() {
         
         // Calculate hash using the same algorithm as for images
         const smallCanvas = document.createElement('canvas');
-        const size = 16;
+        const size = 8;
         smallCanvas.width = size;
         smallCanvas.height = size;
         const smallCtx = smallCanvas.getContext('2d');

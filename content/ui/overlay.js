@@ -197,6 +197,7 @@ function createOverlay(options = {}) {
   
   document.body.appendChild(overlay);
   overlayElement = overlay;
+  const overlayContent = overlay.querySelector('.overlay-content');
   
   const usePoolCheckbox = overlay.querySelector('#use-pool');
   const poolFields = overlay.querySelector('.pool-fields');

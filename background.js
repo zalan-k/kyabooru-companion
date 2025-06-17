@@ -248,11 +248,17 @@ async function saveToServer(data) {
     // Handle duplicate error
     if (response.status === 409) {
       const errorData = await response.json();
+      console.log("Server detected duplicate, but treating as success:", errorData);
+      
+      // Treat as successful save with warning
       return {
-        success: false,
-        duplicateFound: true,
-        exactMatch: errorData.exactMatch || false,  // Include exact match info
-        originalRecord: errorData.duplicate
+        success: true,
+        serverId: `duplicate_${Date.now()}`, // Give it a fake ID for now
+        duplicateWarning: {
+          isDuplicate: true,
+          exactMatch: errorData.exactMatch || false,
+          originalRecord: errorData.duplicate
+        }
       };
     }
     
@@ -264,6 +270,15 @@ async function saveToServer(data) {
     const duration = performance.now() - startTime;
     console.log(`✅ Server save: ${duration.toFixed(2)}ms`);
     
+    if (result.duplicateInfo) {
+      console.log("Server detected duplicate but saved anyway:", result.duplicateInfo);
+      return { 
+        success: true, 
+        serverId: result.imageId,
+        duplicateWarning: result.duplicateInfo
+      };
+    }
+
     return { success: true, serverId: result.imageId };
   } catch (error) {
     console.error("❌ Server save failed:", error);
@@ -434,17 +449,45 @@ async function checkForDuplicateImageIndexedDB(imageHash, similarityThreshold = 
 
 // Helper function for fallback hash comparison
 function calculateHammingDistance(hash1, hash2) {
-  const bin1 = parseInt(hash1, 16).toString(2).padStart(64, '0');
-  const bin2 = parseInt(hash2, 16).toString(2).padStart(64, '0');
-  
-  let distance = 0;
-  for (let i = 0; i < bin1.length; i++) {
-    if (bin1[i] !== bin2[i]) {
-      distance++;
-    }
+  if (!hash1 || !hash2) {
+    return Infinity;
   }
   
-  return distance;
+  try {
+    // ✅ Use the robust character-by-character approach from hash.js
+    const bin1 = hexToBinary(hash1);
+    const bin2 = hexToBinary(hash2);
+    
+    // Handle length differences gracefully
+    const minLength = Math.min(bin1.length, bin2.length);
+    
+    // Count differing bits
+    let distance = 0;
+    for (let i = 0; i < minLength; i++) {
+      if (bin1[i] !== bin2[i]) {
+        distance++;
+      }
+    }
+    
+    // Add length difference as additional distance
+    distance += Math.abs(bin1.length - bin2.length);
+    
+    return distance;
+  } catch (error) {
+    console.error("Error calculating hamming distance:", error);
+    return Infinity;
+  }
+}
+
+// ✅ ADD the hexToBinary helper function from hash.js:
+function hexToBinary(hex) {
+  let binary = '';
+  for (let i = 0; i < hex.length; i++) {
+    const decimal = parseInt(hex[i], 16);
+    const bits = decimal.toString(2).padStart(4, '0');
+    binary += bits;
+  }
+  return binary;
 }
 
 // Download image
@@ -664,6 +707,8 @@ async function handleSaveData(data) {
   const startTime = performance.now();
 
   try {
+    console.log("🔄 handleSaveData starting...", data); // ✅ Add debugging
+    
     // Generate filenames
     const timestamp = new Date().getTime();
     let urlParts;
@@ -676,8 +721,9 @@ async function handleSaveData(data) {
     const domain = urlParts.hostname ? urlParts.hostname.replace(/^www\./, '') : "unknown";
     const baseFilename = `${domain}_${timestamp}`;
     
-    // Initialize hash variable
+    // ✅ INITIALIZE variables at function level
     let imageHash = null;
+    let duplicateWarning = null;
     
     // Calculate hash if we have an image URL
     if (data.imageUrl) {
@@ -694,7 +740,7 @@ async function handleSaveData(data) {
             imageHash = response.hash;
             console.log("Hash computed successfully:", imageHash);
             
-            // Check for duplicates if we have a hash and duplicate detection is enabled
+            // ✅ Check for duplicates if we have a hash and duplicate detection is enabled
             if (settings.duplicateDetection !== false && imageHash) {
               console.log("Checking for duplicates with hash:", imageHash);
               const duplicateCheck = await checkForDuplicateImage(
@@ -703,25 +749,13 @@ async function handleSaveData(data) {
               );
               
               if (duplicateCheck.isDuplicate) {
-                console.log("Duplicate found:", duplicateCheck);
-                // Notify user about duplicate
-                try {
-                  await browser.tabs.sendMessage(data.sender.tab.id, {
-                    action: "show-duplicate-warning",
-                    duplicateFound: true,
-                    exactMatch: duplicateCheck.exactMatch,
-                    originalRecord: duplicateCheck.originalRecord
-                  });
-                } catch (error) {
-                  console.error("Error showing duplicate warning:", error);
-                }
-                
-                return {
-                  success: false,
-                  duplicateFound: true,
+                console.log("Duplicate found, but continuing with save:", duplicateCheck);
+                duplicateWarning = {
+                  isDuplicate: true,
                   exactMatch: duplicateCheck.exactMatch,
                   originalRecord: duplicateCheck.originalRecord
                 };
+                // ✅ Continue with save operation instead of returning early
               }
             }
           } else {
@@ -789,8 +823,10 @@ async function handleSaveData(data) {
     
     // Save to database
     const dbStartTime = performance.now();
-    await saveToDatabase(dbData);
+    const dbResult = await saveToDatabase(dbData); // ✅ Capture result
     const dbTime = performance.now() - dbStartTime;
+    
+    console.log("Database save result:", dbResult); // ✅ Add debugging
     
     // Save media if available
     let mediaSuccess = true;
@@ -836,18 +872,25 @@ async function handleSaveData(data) {
       Database save: ${dbTime.toFixed(2)}ms
       Total time: ${totalTime.toFixed(2)}ms`);
 
-    return {
+    // ✅ Prepare final response
+    const finalResponse = {
       success: true,
       mediaSuccess,
       mediaType,
       jsonSuccess,
-      imageHash // Return the hash in the result
+      imageHash,
+      duplicateWarning  // ✅ This is now properly scoped
     };
+    
+    console.log("🎉 handleSaveData returning:", finalResponse); // ✅ Add debugging
+    return finalResponse;
+    
   } catch (error) {
-    console.error("Error in handleSaveData:", error);
+    console.error("❌ Error in handleSaveData:", error);
     return { success: false, error: error.message };
   }
 }
+
 
 // Helper function for hash comparison
 function calculateHammingDistance(hash1, hash2) {

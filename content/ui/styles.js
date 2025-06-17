@@ -475,6 +475,11 @@ function removeStyles(styleElement) {
     .ts-toast.error {
       background: rgba(220, 53, 69, 0.9);
     }
+
+    .ts-toast.warning {
+      background: rgba(255, 152, 0, 0.9); /* Orange for warnings */
+      border-left: 4px solid #ff9800;
+    }
     
     @keyframes ts-slideIn {
       from { transform: translateX(100%); opacity: 0; }
