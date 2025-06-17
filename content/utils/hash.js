@@ -50,7 +50,7 @@ window.TagSaver.Hash = (function() {
           // Create a small 8x8 canvas for the hash
           const canvas = document.createElement('canvas');
           const ctx = canvas.getContext('2d');
-          const size = 16;
+          const size = 8;
           
           canvas.width = size;
           canvas.height = size;
