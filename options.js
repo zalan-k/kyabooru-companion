@@ -40,7 +40,7 @@ function saveOptions(e) {
       autoDetect: true,
       notificationsEnabled: true,
       duplicateDetection: true,
-      similarityThreshold: 10,
+      similarityThreshold: 8,
       useLocalServer: true  // Add this line
     };
     

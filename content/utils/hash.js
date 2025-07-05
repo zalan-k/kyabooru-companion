@@ -1,6 +1,6 @@
 /**
  * Image Hashing Utilities
- * Provides functions for image deduplication
+ * Provides functions for image deduplication using Perceptual Hash (pHash)
  */
 window.TagSaver = window.TagSaver || {};
 window.TagSaver.Hash = (function() {
@@ -9,7 +9,7 @@ window.TagSaver.Hash = (function() {
   const hashCache = {};
   
   /**
-   * Compute average hash (aHash) for an image
+   * Compute perceptual hash (pHash) for an image - UPDATED METHOD
    * @param {string} imageUrl
    * @returns {Promise<string>}
    */
@@ -35,7 +35,7 @@ window.TagSaver.Hash = (function() {
     }
 
     return new Promise((resolve, reject) => {
-      console.log(`Computing hash for ${imageUrl.substring(0, 50)}...`);
+      console.log(`Computing pHash for ${imageUrl.substring(0, 50)}...`);
       
       const img = new Image();
       
@@ -47,48 +47,16 @@ window.TagSaver.Hash = (function() {
       img.onload = function() {
         clearTimeout(timeoutId);
         try {
-          // Create a small 8x8 canvas for the hash
-          const canvas = document.createElement('canvas');
-          const ctx = canvas.getContext('2d');
-          const size = 8;
-          
-          canvas.width = size;
-          canvas.height = size;
-          
-          // Scale image to 8x8 and draw in grayscale
-          ctx.drawImage(img, 0, 0, size, size);
-          const imageData = ctx.getImageData(0, 0, size, size).data;
-          
-          // Calculate average pixel value
-          let sum = 0;
-          const grayPixels = [];
-          
-          for (let i = 0; i < imageData.length; i += 4) {
-            // Convert to grayscale - use proper weighting for human perception
-            const gray = Math.floor(0.299 * imageData[i] + 0.587 * imageData[i+1] + 0.114 * imageData[i+2]);
-            grayPixels.push(gray);
-            sum += gray;
-          }
-          
-          const avg = sum / grayPixels.length;
-          
-          // Generate binary hash
-          let hashString = '';
-          for (let i = 0; i < grayPixels.length; i++) {
-            // Add a 1 if pixel is above average, 0 otherwise
-            hashString += grayPixels[i] >= avg ? '1' : '0';
-          }
-          
-          // Convert binary string to hex for storage
-          const hashHex = binaryToHex(hashString);
+          // Use perceptual hash instead of average hash
+          const hashHex = computePerceptualHash(img, 16, [255, 255, 255]);
           
           // Cache the result
           hashCache[imageUrl] = hashHex;
           
-          console.log(`Hash computed: ${hashHex}`);
+          console.log(`pHash computed: ${hashHex}`);
           resolve(hashHex);
         } catch (error) {
-          console.error("Error computing hash:", error);
+          console.error("Error computing pHash:", error);
           reject(error);
         }
       };
@@ -109,6 +77,92 @@ window.TagSaver.Hash = (function() {
         reject(error);
       }
     });
+  }
+  
+  /**
+   * Compute perceptual hash using DCT - with transparency handling
+   * @param {HTMLImageElement} imageElement 
+   * @param {number} size - Canvas size (default 16)
+   * @param {Array} backgroundColor - RGB background color for transparency
+   * @returns {string} - Hex hash string
+   */
+  function computePerceptualHash(imageElement, size = 16, backgroundColor = [255, 255, 255]) {
+    try {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      canvas.width = size;
+      canvas.height = size;
+      
+      // Fill with background color first (handles transparency)
+      ctx.fillStyle = `rgb(${backgroundColor[0]}, ${backgroundColor[1]}, ${backgroundColor[2]})`;
+      ctx.fillRect(0, 0, size, size);
+      
+      // Draw image on top (transparency will blend with background)
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(imageElement, 0, 0, size, size);
+      
+      const imageData = ctx.getImageData(0, 0, size, size).data;
+      const grayPixels = [];
+      
+      // Convert to grayscale matrix
+      for (let y = 0; y < size; y++) {
+        grayPixels[y] = [];
+        for (let x = 0; x < size; x++) {
+          const i = (y * size + x) * 4;
+          grayPixels[y][x] = 0.299 * imageData[i] + 0.587 * imageData[i+1] + 0.114 * imageData[i+2];
+        }
+      }
+      
+      // Apply 2D DCT (simplified version)
+      const dctSize = 8;
+      const dct = [];
+      for (let u = 0; u < dctSize; u++) {
+        dct[u] = [];
+        for (let v = 0; v < dctSize; v++) {
+          let sum = 0;
+          for (let x = 0; x < size; x++) {
+            for (let y = 0; y < size; y++) {
+              sum += grayPixels[x][y] * 
+                     Math.cos((2*x + 1) * u * Math.PI / (2*size)) *
+                     Math.cos((2*y + 1) * v * Math.PI / (2*size));
+            }
+          }
+          const cu = u === 0 ? 1/Math.sqrt(2) : 1;
+          const cv = v === 0 ? 1/Math.sqrt(2) : 1;
+          dct[u][v] = (2/size) * cu * cv * sum;
+        }
+      }
+      
+      // Get average of DCT coefficients (excluding DC component)
+      let sum = 0;
+      let count = 0;
+      for (let y = 0; y < dctSize; y++) {
+        for (let x = 0; x < dctSize; x++) {
+          if (x !== 0 || y !== 0) { // Skip DC component
+            sum += dct[y][x];
+            count++;
+          }
+        }
+      }
+      const avg = sum / count;
+      
+      // Generate hash
+      let hashBits = '';
+      for (let y = 0; y < dctSize; y++) {
+        for (let x = 0; x < dctSize; x++) {
+          if (x !== 0 || y !== 0) {
+            hashBits += dct[y][x] >= avg ? '1' : '0';
+          }
+        }
+      }
+      
+      return binaryToHex(hashBits);
+    } catch (error) {
+      console.error('Error in computePerceptualHash:', error);
+      throw error;
+    }
   }
   
   /**
@@ -190,7 +244,7 @@ window.TagSaver.Hash = (function() {
    * @param {number} threshold - Similarity threshold (lower = more similar)
    * @returns {boolean} - Whether images are considered similar
    */
-  function areSimilar(hash1, hash2, threshold = 10) {
+  function areSimilar(hash1, hash2, threshold = 8) { // CHANGED: Default threshold to 8
     const distance = hammingDistance(hash1, hash2);
     return distance <= threshold;
   }
@@ -229,33 +283,8 @@ window.TagSaver.Hash = (function() {
         // Get data URL for preview
         const dataUrl = canvas.toDataURL('image/jpeg');
         
-        // Calculate hash using the same algorithm as for images
-        const smallCanvas = document.createElement('canvas');
-        const size = 8;
-        smallCanvas.width = size;
-        smallCanvas.height = size;
-        const smallCtx = smallCanvas.getContext('2d');
-        smallCtx.drawImage(video, 0, 0, size, size);
-        
-        const imageData = smallCtx.getImageData(0, 0, size, size).data;
-        let sum = 0;
-        const grayPixels = [];
-        
-        for (let i = 0; i < imageData.length; i += 4) {
-          const gray = Math.floor(0.299 * imageData[i] + 0.587 * imageData[i+1] + 0.114 * imageData[i+2]);
-          grayPixels.push(gray);
-          sum += gray;
-        }
-        
-        const avg = sum / grayPixels.length;
-        
-        let hashString = '';
-        for (let i = 0; i < grayPixels.length; i++) {
-          hashString += grayPixels[i] >= avg ? '1' : '0';
-        }
-        
-        // Convert binary to hex
-        const hashHex = window.TagSaver.Hash.binaryToHex(hashString);
+        // Calculate hash using pHash
+        const hashHex = computePerceptualHash(video, 16, [255, 255, 255]);
         
         // Clean up
         video.src = '';
@@ -279,7 +308,7 @@ window.TagSaver.Hash = (function() {
 
   // Public API
   return {
-    computeAverageHash,
+    computeAverageHash, // KEEPING SAME NAME for compatibility
     hammingDistance,
     areSimilar,
     hexToBinary,

@@ -228,7 +228,7 @@ async function saveToServer(data) {
       poolId: data.poolId,
       poolIndex: data.poolIndex,
       mediaType: detectMediaType(data.imageUrl),
-      similarityThreshold: settings.similarityThreshold || 10  // Add similarity threshold
+      similarityThreshold: settings.similarityThreshold || 8
     };
     
     const controller = new AbortController();
@@ -1240,7 +1240,7 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
   else if (message.action === "check-image-hash") {
-    const threshold = settings.similarityThreshold || 10;
+    const threshold = settings.similarityThreshold || 8;
     checkForDuplicateImage(message.hash, threshold)
       .then(result => sendResponse({ exists: result.isDuplicate, exactMatch: result.exactMatch }))
       .catch(error => sendResponse({ exists: false, error: error.message }));
@@ -1265,7 +1265,7 @@ browser.runtime.onInstalled.addListener(async (details) => {
           autoDetect: true,
           notificationsEnabled: true,
           duplicateDetection: true,
-          similarityThreshold: 10,
+          similarityThreshold: 8,
           useLocalServer: true
         };
         
