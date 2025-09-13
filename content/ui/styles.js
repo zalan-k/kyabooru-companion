@@ -529,61 +529,127 @@ function removeStyles(styleElement) {
     }
   `;
 
-  const poolStyles = `
-  .pool-container {
-    margin-top: 15px;
-    padding: 10px;
-    background: rgba(0, 0, 0, 0.2);
-    border-radius: 8px;
-  }
-  
-  .pool-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 10px;
-  }
-  
-  .pool-button {
-    background: rgba(100, 100, 255, 0.3);
-    border: 1px solid rgba(100, 100, 255, 0.5);
-    color: white;
-    padding: 4px 8px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 12px;
-  }
-  
-  .pool-button:hover:not(:disabled) {
-    background: rgba(100, 100, 255, 0.5);
-  }
-  
-  .pool-button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-  
-  .pool-fields {
-    display: grid;
-    gap: 10px;
-  }
-  
-  .pool-field-row {
-    display: grid;
-    grid-template-columns: 80px 1fr;
-    align-items: center;
-    gap: 10px;
-  }
-  
-  .pool-field-row input {
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    color: white;
-    border-radius: 4px;
-    padding: 6px 10px;
-    font-size: 13px;
-  }
-`;
+  /**
+   * Pool and Memory buttons container styles
+   */
+  const poolMemoryStyles = `
+    .pool-memory-container {
+      display: flex;
+      gap: 15px;
+      align-items: flex-start;
+      margin-top: 15px;
+    }
+    
+    .pool-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .pool-container {
+      flex: 0 0 auto;
+      width: 300px;
+      padding: 10px;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 8px;
+    }
+    
+    .pool-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .header-buttons {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    
+    .pool-title {
+      font-weight: 500;
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 13px;
+    }
+    
+    .pool-button {
+      background: rgba(100, 100, 255, 0.3);
+      border: 1px solid rgba(100, 100, 255, 0.5);
+      color: white;
+      padding: 3px 6px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 11px;
+      transition: all 0.2s ease;
+    }
+    
+    .pool-button:hover {
+      background: rgba(100, 100, 255, 0.5);
+      border-color: rgba(100, 100, 255, 0.7);
+    }
+    
+    .pool-fields {
+      display: grid;
+      gap: 8px;
+    }
+    
+    .pool-field-row {
+      display: grid;
+      grid-template-columns: 60px 1fr;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .pool-field-row label {
+      color: rgba(255, 255, 255, 0.8);
+      font-size: 12px;
+    }
+    
+    .pool-field-row input {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: white;
+      border-radius: 4px;
+      padding: 5px 8px;
+      font-size: 12px;
+      transition: all 0.2s ease;
+    }
+    
+    .pool-field-row input:focus {
+      background: rgba(255, 255, 255, 0.15);
+      border-color: rgba(255, 255, 255, 0.3);
+      outline: none;
+    }
+  `;
+
+  /**
+   * Memory buttons styles
+   */
+  const memoryButtonStyles = `
+    .memory-button {
+      background: rgba(74, 137, 220, 0.3);
+      border: 1px solid rgba(74, 137, 220, 0.5);
+      color: white;
+      padding: 3px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 11px;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+    
+    .memory-button:hover {
+      background: rgba(74, 137, 220, 0.5);
+      border-color: rgba(74, 137, 220, 0.7);
+      transform: translateY(-2px);
+    }
+    
+    .memory-button:active {
+      transform: translateY(0);
+    }
+  `;
 
   /**
    * Get all combined styles for the extension
@@ -597,7 +663,8 @@ function removeStyles(styleElement) {
       ${imageSelectorStyles}
       ${toastStyles}
       ${autocompleteStyles}
-      ${poolStyles}
+      ${poolMemoryStyles}
+      ${memoryButtonStyles}
       ${duplicateWarningStyles}
       ${mediaPlaceholderStyles}
     `;
@@ -613,6 +680,8 @@ function removeStyles(styleElement) {
     imageSelectorStyles,
     toastStyles,
     autocompleteStyles,
+    poolMemoryStyles,
+    memoryButtonStyles,
     getAllStyles
   };
 })();

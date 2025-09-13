@@ -179,6 +179,27 @@ function startImageSelection() {
   });
 }
 
+/**
+ * Store the last saved data in session storage (clears when browser closes)
+ * @param {Array<string>} tags - The tags that were saved
+ * @param {Object} poolData - The pool data that was saved (if any)
+ */
+function storeLastSavedData(tags, poolData) {
+  try {
+    const lastSavedData = {
+      tags: tags,
+      poolId: poolData ? poolData.poolId : null,
+      timestamp: new Date().toISOString()
+    };
+    
+    // Use sessionStorage so it clears when browser session ends
+    sessionStorage.setItem('tagSaverLastSaved', JSON.stringify(lastSavedData));
+    console.log('Last saved data stored in session:', lastSavedData);
+  } catch (error) {
+    console.error('Error storing last saved data:', error);
+  }
+}
+
 function handleSave(tags, poolData = null) {
   const { UI } = getNamespaces();
   

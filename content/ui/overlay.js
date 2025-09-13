@@ -32,6 +32,60 @@ window.TagSaver.UI.Overlay = (function() {
     }
   }
 
+  /**
+   * Load last saved data from session storage (clears when browser closes)
+   */
+  function loadLastSavedData() {
+    try {
+      const stored = sessionStorage.getItem('tagSaverLastSaved');
+      return stored ? JSON.parse(stored) : null;
+    } catch (error) {
+      console.error('Error loading last saved data:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Load last saved tags and ID into the overlay
+   */
+  function loadLastTagsAndId() {
+    const lastData = loadLastSavedData();
+    if (!lastData) return;
+
+    // Load tags if available
+    if (lastData.tags && lastData.tags.length > 0) {
+      const tagDisplay = overlayElement.querySelector('#tag-display');
+      if (tagDisplay) {
+        TagPills.renderTagPills(lastData.tags, tagDisplay);
+      }
+    }
+
+    // Load pool ID if available
+    if (lastData.poolId) {
+      const poolIdInput = overlayElement.querySelector('#pool-id');
+      if (poolIdInput) {
+        poolIdInput.value = lastData.poolId;
+        // Trigger the change event to auto-populate the index
+        poolIdInput.dispatchEvent(new Event('change'));
+      }
+    }
+  }
+
+  /**
+   * Load only the last saved pool ID into the overlay
+   */
+  function loadLastIdOnly() {
+    const lastData = loadLastSavedData();
+    if (!lastData || !lastData.poolId) return;
+
+    const poolIdInput = overlayElement.querySelector('#pool-id');
+    if (poolIdInput) {
+      poolIdInput.value = lastData.poolId;
+      // Trigger the change event to auto-populate the index
+      poolIdInput.dispatchEvent(new Event('change'));
+    }
+  }
+
 function positionImagePreview(previewElement, overlayContent) {
   if (!previewElement || !overlayContent) return;
   
@@ -162,64 +216,60 @@ function createOverlay(options = {}) {
   }
 
   overlay.innerHTML = `
-  <div class="overlay-content" style="width: 80%; max-width: 1000px; background: rgba(30, 30, 30, 0.85); padding: 20px; border-radius: 16px; color: white;">
-    <div class="header">
-      <div class="url-display">URL: <span id="current-url">${pageUrl}</span></div>
-    </div>
-    
-    <div class="tag-input-container">
-      <div id="tag-display" class="tag-display"></div>
-      <input type="text" placeholder="Type a tag and press Enter to add..." id="tag-input" value=" " />
-    </div>
-    
-    <!-- Add Pool Management UI -->
-    <div class="pool-container">
-      <div class="pool-header">
-        <input type="checkbox" id="use-pool" />
-        <label for="use-pool">Add to Image Pool</label>
-        <button id="generate-pool-id" class="pool-button" disabled>Generate ID</button>
+    <div class="overlay-content" style="width: 80%; max-width: 1000px; background: rgba(30, 30, 30, 0.85); padding: 20px; border-radius: 16px; color: white;">
+      <div class="header">
+        <div class="url-display">URL: <span id="current-url">${pageUrl}</span></div>
       </div>
-      <div class="pool-fields" style="display: none;">
-        <div class="pool-field-row">
-          <label for="pool-id">Pool ID:</label>
-          <input type="text" id="pool-id" placeholder="Enter or generate pool ID" />
+    
+      <div class="tag-input-container">
+        <div id="tag-display" class="tag-display"></div>
+        <input type="text" placeholder="Type a tag and press Enter to add..." id="tag-input" value=" " />
+      </div>
+    
+      <!-- Pool Management UI -->
+      <div class="pool-container">
+        <div class="pool-header">
+          <span class="pool-title">Image Pool</span>
+          <div class="header-buttons">
+            <button id="load-last-tags-id" class="memory-button" title="Load last saved tags and pool ID">🏷️</button>
+            <button id="load-last-id" class="memory-button" title="Load last saved pool ID only">🆔</button>
+            <button id="generate-pool-id" class="pool-button">Generate ID</button>
+          </div>
         </div>
-        <div class="pool-field-row">
-          <label for="pool-index">Index:</label>
-          <input type="number" id="pool-index" placeholder="Position in pool" min="0" value="0" />
+        <div class="pool-fields">
+          <div class="pool-field-row">
+            <label for="pool-id">Pool ID:</label>
+            <input type="text" id="pool-id" placeholder="Enter or generate pool ID" />
+          </div>
+          <div class="pool-field-row">
+            <label for="pool-index">Index:</label>
+            <input type="number" id="pool-index" placeholder="Position in pool" min="0" value="0" />
+          </div>
         </div>
       </div>
-    </div>
     
-    <div class="shortcuts-hint">Press <kbd>Enter</kbd> to save or <kbd>Esc</kbd> to cancel</div>
-  </div>
-`;
+      <div class="shortcuts-hint">Press <kbd>Enter</kbd> to save or <kbd>Esc</kbd> to cancel</div>
+    </div>
+  `;
   
   document.body.appendChild(overlay);
   overlayElement = overlay;
   const overlayContent = overlay.querySelector('.overlay-content');
   
-  const usePoolCheckbox = overlay.querySelector('#use-pool');
-  const poolFields = overlay.querySelector('.pool-fields');
   const generatePoolIdButton = overlay.querySelector('#generate-pool-id');
   const poolIdInput = overlay.querySelector('#pool-id');
   const poolIndexInput = overlay.querySelector('#pool-index');
+  const loadLastTagsIdButton = overlay.querySelector('#load-last-tags-id');
+  const loadLastIdButton = overlay.querySelector('#load-last-id');
 
   // Focus the input - ensures cursor is after the space that's preloaded
   const input = overlay.querySelector('#tag-input');
   const tagDisplay = overlay.querySelector('#tag-display');
-  
-  usePoolCheckbox.addEventListener('change', () => {
-    poolFields.style.display = usePoolCheckbox.checked ? 'block' : 'none';
-    generatePoolIdButton.disabled = !usePoolCheckbox.checked;
-    
-    // Clear fields when disabling
-    if (!usePoolCheckbox.checked) {
-      poolIdInput.value = '';
-      poolIndexInput.value = '0';
-    }
-  });
 
+  // Memory button event listeners
+  loadLastTagsIdButton.addEventListener('click', loadLastTagsAndId);
+  loadLastIdButton.addEventListener('click', loadLastIdOnly);
+  
   generatePoolIdButton.addEventListener('click', () => {
     // Generate a random string ID
     const randomId = Math.random().toString(36).substring(2, 10);
@@ -230,7 +280,7 @@ function createOverlay(options = {}) {
   });
 
   poolIdInput.addEventListener('change', async () => {
-    if (!poolIdInput.value.trim() || !usePoolCheckbox.checked) return;
+    if (!poolIdInput.value.trim()) return;
     
     try {
       // Get the highest index in this pool
@@ -297,8 +347,8 @@ function createOverlay(options = {}) {
     
     const displayTags = TagPills.getCurrentTagsFromDisplay(tagDisplay);
     
-    // Get pool data if enabled
-    const poolData = usePoolCheckbox && usePoolCheckbox.checked && poolIdInput.value.trim() ? {
+    // Get pool data only if pool ID is provided
+    const poolData = poolIdInput.value.trim() ? {
       poolId: poolIdInput.value.trim(),
       poolIndex: parseInt(poolIndexInput.value, 10) || 0
     } : null;
@@ -635,6 +685,9 @@ function createOverlay(options = {}) {
     closeOverlay,
     hideImagePreview,
     isOverlayOpen,
-    showDuplicateWarning  // Add this line
+    showDuplicateWarning,
+    loadLastSavedData,
+    loadLastTagsAndId,
+    loadLastIdOnly
   };
 })();
