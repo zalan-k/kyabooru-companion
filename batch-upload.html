@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Tag Saver - Batch Upload</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: #f5f5f5;
+      color: #333;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    h1 {
+      margin: 0 0 20px 0;
+      color: #444;
+      font-size: 24px;
+    }
+
+    .section {
+      margin-bottom: 30px;
+    }
+
+    .section-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 10px;
+      color: #555;
+    }
+
+    /* Add Images Placeholder */
+    .add-images-placeholder {
+      width: 150px;
+      height: 197px; /* 1024:1344 ratio scaled to 150px width */
+      border: 2px dashed #ddd;
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #fafafa;
+      transition: all 0.3s ease;
+      cursor: pointer;
+    }
+
+    .add-images-placeholder:hover,
+    .add-images-placeholder.drag-over {
+      border-color: #4a89dc;
+      background: #f0f7ff;
+    }
+
+    .add-images-placeholder .plus-icon {
+      font-size: 48px;
+      color: #999;
+      margin-bottom: 8px;
+    }
+
+    .add-images-placeholder .add-text {
+      font-size: 12px;
+      color: #666;
+      text-align: center;
+      line-height: 1.3;
+    }
+
+    /* Shared Tags Section */
+    .shared-tags-container {
+      background: #f9f9f9;
+      border-radius: 8px;
+      padding: 15px;
+    }
+
+    .tag-input-container {
+      position: relative;
+    }
+
+    .tag-display {
+      padding: 10px;
+      min-height: 30px;
+      max-height: 120px;
+      overflow-y: auto;
+      margin-bottom: 15px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      background: white;
+      border-radius: 6px;
+      border: 1px solid #ddd;
+    }
+
+    #tag-input {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      outline: none;
+    }
+
+    #tag-input:focus {
+      border-color: #4a89dc;
+    }
+
+    /* Pool Info */
+    .pool-info {
+      background: #e8f4fd;
+      border-radius: 6px;
+      padding: 10px 15px;
+      border-left: 4px solid #4a89dc;
+    }
+
+    .pool-id {
+      font-family: monospace;
+      font-weight: bold;
+      color: #2c5aa0;
+    }
+
+    /* Thumbnail Grid */
+    .thumbnail-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 15px;
+      min-height: 100px;
+      padding: 20px;
+      border: 1px dashed #ddd;
+      border-radius: 8px;
+      background: #fafafa;
+    }
+
+    .thumbnail-grid.empty {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #999;
+      font-style: italic;
+    }
+
+    .thumbnail-item {
+      position: relative;
+      background: white;
+      border-radius: 6px;
+      padding: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      cursor: move;
+      transition: transform 0.2s ease;
+    }
+
+    .thumbnail-item:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    }
+
+    .thumbnail-item.dragging {
+      opacity: 0.5;
+      transform: rotate(5deg);
+    }
+
+    .thumbnail-image {
+      width: 100%;
+      height: 197px; /* 1024:1344 ratio scaled to 150px width */
+      object-fit: cover;
+      border-radius: 6px; /* Rounded edges for images */
+      background: #f0f0f0;
+      image-rendering: auto;
+      image-rendering: -webkit-optimize-contrast;
+      image-rendering: crisp-edges;
+    }
+
+    .thumbnail-info {
+      display: none; /* Hide file size info */
+    }
+
+    .thumbnail-index {
+      background: #4a89dc;
+      color: white;
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: bold;
+    }
+
+    .thumbnail-remove {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #dc3545;
+      color: white;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+
+    .thumbnail-remove:hover {
+      background: #c82333;
+    }
+
+    /* Action Buttons */
+    .action-buttons {
+      display: flex;
+      gap: 15px;
+      justify-content: flex-end;
+      margin-top: 20px;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+    }
+
+    .btn-primary {
+      background: #4a89dc;
+      color: white;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: #3b7dd8;
+    }
+
+    .btn-secondary {
+      background: #6c757d;
+      color: white;
+    }
+
+    .btn-secondary:hover {
+      background: #5a6268;
+    }
+
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    /* Progress Bar */
+    .progress-container {
+      display: none;
+      margin-top: 20px;
+      background: #f0f0f0;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      height: 4px;
+      background: #4a89dc;
+      transition: width 0.3s ease;
+      width: 0%;
+    }
+
+    .progress-text {
+      padding: 10px;
+      text-align: center;
+      font-size: 14px;
+      color: #666;
+    }
+
+    /* Status Messages */
+    .status-message {
+      margin-top: 15px;
+      padding: 10px 15px;
+      border-radius: 6px;
+      display: none;
+    }
+
+    .status-message.success {
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+
+    .status-message.error {
+      background: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+
+    /* File input hidden */
+    #file-input {
+      display: none;
+    }
+
+    /* Tag autocomplete styles */
+    .tag-autocomplete-dropdown {
+      position: absolute;
+      width: 100%;
+      max-height: 200px;
+      overflow-y: auto;
+      background: rgba(255, 255, 255, 0.95);
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      margin-top: 5px;
+      z-index: 999999995;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+    
+    .autocomplete-item {
+      padding: 8px 12px;
+      cursor: pointer;
+      color: #333;
+      transition: background 0.1s ease;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    
+    .autocomplete-item:hover,
+    .autocomplete-item.selected {
+      background: rgba(74, 137, 220, 0.1);
+    }
+    
+    .autocomplete-category {
+      color: rgba(0, 0, 0, 0.5);
+      font-size: 11px;
+      padding: 2px 5px;
+      background: rgba(0, 0, 0, 0.1);
+      border-radius: 3px;
+      margin-left: 8px;
+    }
+
+    /* Tag category dropdown */
+    .tag-category-dropdown {
+      position: fixed;
+      background: rgba(255, 255, 255, 0.95);
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      z-index: 999999999;
+      min-width: 120px;
+      overflow: hidden;
+    }
+    
+    .tag-category-option {
+      padding: 8px 12px;
+      cursor: pointer;
+      color: #333;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: background 0.15s ease;
+    }
+    
+    .tag-category-option:hover {
+      background: rgba(74, 137, 220, 0.1);
+    }
+    
+    .tag-category-option.selected {
+      background: rgba(74, 137, 220, 0.15);
+    }
+    
+    .category-color {
+      width: 12px;
+      height: 12px;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+    
+    .selected-mark {
+      margin-left: auto;
+      opacity: 0.7;
+      font-size: 11px;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .thumbnail-grid {
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 10px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Batch Upload Images</h1>
+    
+    <!-- Shared Tags -->
+    <div class="section">
+      <div class="section-title">Shared Tags</div>
+      <div class="shared-tags-container">
+        <div class="tag-input-container">
+          <div id="tag-display" class="tag-display"></div>
+          <input type="text" placeholder="Type a tag and press Enter to add..." id="tag-input">
+        </div>
+      </div>
+    </div>
+
+    <!-- Pool Information -->
+    <div class="section" id="pool-section" style="display: none;">
+      <div class="section-title">Pool Information</div>
+      <div class="pool-info">
+        <div>Pool ID: <span class="pool-id" id="pool-id">Not assigned yet</span></div>
+        <div style="margin-top: 5px; font-size: 13px; color: #666;">
+          Images will be automatically indexed based on their order below
+        </div>
+      </div>
+    </div>
+
+    <!-- Image Grid with integrated upload -->
+    <div class="section">
+      <div class="section-title">Images (<span id="image-count">0</span>)</div>
+      <div class="thumbnail-grid" id="thumbnail-grid">
+        <div class="add-images-placeholder" id="add-placeholder">
+          <div class="plus-icon">+</div>
+          <div class="add-text">Drop images here<br>or click to select</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Progress -->
+    <div class="progress-container" id="progress-container">
+      <div class="progress-bar" id="progress-bar"></div>
+      <div class="progress-text" id="progress-text">Processing...</div>
+    </div>
+
+    <!-- Status Messages -->
+    <div class="status-message" id="status-message"></div>
+
+    <!-- Action Buttons -->
+    <div class="action-buttons">
+      <button class="btn btn-secondary" id="clear-all-btn">Clear All</button>
+      <button class="btn btn-primary" id="process-btn" disabled>Process Images</button>
+    </div>
+
+    <input type="file" id="file-input" multiple accept="image/*,video/webm,video/mp4">
+  </div>
+
+  <script src="batch-upload.js"></script>
+</body>
+</html>

@@ -620,6 +620,26 @@ async function downloadMedia(mediaUrl, filename) {
   }
 }
 
+async function downloadFileFromBlob(blobUrl, filename) {
+  try {
+    const response = await fetch(blobUrl);
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    
+    await browser.downloads.download({
+      url: url,
+      filename: `${settings.saveFolder}/${filename}`,
+      saveAs: false
+    });
+    
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return detectMediaType(filename);
+  } catch (error) {
+    console.error(`Error downloading blob ${filename}:`, error);
+    return null;
+  }
+}
+
 async function searchTags(prefix) {
   if (settings.useLocalServer) {
     try {
@@ -891,6 +911,103 @@ async function handleSaveData(data) {
   }
 }
 
+// Handle batch image saving
+async function handleSaveBatchImage(data) {
+  const startTime = performance.now();
+
+  try {
+    console.log("🔄 handleSaveBatchImage starting...", data.fileName);
+    
+    // Generate filenames for batch upload
+    const timestamp = new Date().getTime();
+    const baseFilename = `batch_${data.poolId}_${String(data.poolIndex).padStart(3, '0')}_${timestamp}`;
+    
+    // Get file extension from original filename
+    const extension = data.fileName.split('.').pop().toLowerCase();
+    const finalFilename = `${baseFilename}.${extension}`;
+    
+    // Save the actual file
+    let mediaSuccess = true;
+    let mediaType = 'image';
+    
+    if (data.blobUrl) {
+      const mediaResult = await downloadFileFromBlob(data.blobUrl, finalFilename);
+      mediaSuccess = !!mediaResult;
+      mediaType = mediaResult || 'image';
+    }
+    
+    // Process tags for better search
+    const tagTexts = data.tags.map(tag => {
+      if (tag.includes(':')) {
+        const [category, name] = tag.split(':', 2);
+        return [tag.toLowerCase(), name.toLowerCase()];
+      }
+      return [tag.toLowerCase()];
+    }).flat();
+
+    // Prepare data for database
+    const dbData = {
+      url: data.url,
+      tags: data.tags,
+      tagText: tagTexts,
+      imageUrl: `${settings.saveFolder}/${finalFilename}`, // Local file path
+      timestamp: data.timestamp,
+      poolId: data.poolId,
+      poolIndex: data.poolIndex,
+      localFile: true
+    };
+    
+    // Save to database
+    const dbResult = await saveToDatabase(dbData);
+    
+    // Process tags into categories for JSON
+    const categorizedTags = {};
+    data.tags.forEach(tag => {
+      if (tag.includes(':')) {
+        const [category, name] = tag.split(':', 2);
+        if (!categorizedTags[category]) {
+          categorizedTags[category] = [];
+        }
+        categorizedTags[category].push(name);
+      } else {
+        if (!categorizedTags["general"]) {
+          categorizedTags["general"] = [];
+        }
+        categorizedTags["general"].push(tag);
+      }
+    });
+    
+    // Save JSON metadata
+    const jsonData = {
+      sourceUrl: data.url,
+      tags: categorizedTags,
+      imageUrl: `${settings.saveFolder}/${finalFilename}`,
+      mediaType: mediaType,
+      timestamp: data.timestamp,
+      poolId: data.poolId,
+      poolIndex: data.poolIndex,
+      originalFileName: data.fileName,
+      localFile: true
+    };
+    
+    const jsonSuccess = await saveJSON(jsonData, `${baseFilename}.json`);
+
+    const totalTime = performance.now() - startTime;
+    console.log(`📊 Batch image processed in ${totalTime.toFixed(2)}ms`);
+
+    return {
+      success: true,
+      mediaSuccess,
+      mediaType,
+      jsonSuccess,
+      filename: finalFilename
+    };
+    
+  } catch (error) {
+    console.error("❌ Error in handleSaveBatchImage:", error);
+    return { success: false, error: error.message };
+  }
+}
 
 // Helper function for hash comparison
 function calculateHammingDistance(hash1, hash2) {
@@ -1202,6 +1319,13 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .catch(error => sendResponse({ success: false, error: error.message }));
     return true; // Required for async sendResponse
   }
+  else if (message.action === "save-batch-image") {  // <-- ADD THIS
+    handleSaveBatchImage(message.data)
+      .then(result => sendResponse(result))
+      .catch(error => sendResponse({ success: false, error: error.message }));
+    return true; // Required for async sendResponse
+  }
+
   else if (message.action === "search-tags") {
     searchTags(message.query)
       .then(results => sendResponse(results))

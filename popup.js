@@ -4,7 +4,7 @@ document.getElementById('save-current').addEventListener('click', function() {
       browser.tabs.sendMessage(tabs[0].id, {
         action: "show-overlay"
       });
-      window.close(); // Close the popup
+      window.close();
     });
   });
   
@@ -15,6 +15,13 @@ document.getElementById('save-current').addEventListener('click', function() {
       });
       window.close();
     });
+  });
+
+  document.getElementById('batch-upload').addEventListener('click', function() {
+    browser.tabs.create({
+      url: browser.runtime.getURL('batch-upload.html')
+    });
+    window.close();
   });
   
   document.getElementById('process-all-tabs').addEventListener('click', function() {
