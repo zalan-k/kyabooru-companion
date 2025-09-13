@@ -180,7 +180,7 @@ function startImageSelection() {
 }
 
 /**
- * Store the last saved data in session storage (clears when browser closes)
+ * Store the last saved data in localStorage (persists across tab closes)
  * @param {Array<string>} tags - The tags that were saved
  * @param {Object} poolData - The pool data that was saved (if any)
  */
@@ -192,11 +192,11 @@ function storeLastSavedData(tags, poolData) {
       timestamp: new Date().toISOString()
     };
     
-    // Use sessionStorage so it clears when browser session ends
-    sessionStorage.setItem('tagSaverLastSaved', JSON.stringify(lastSavedData));
-    console.log('Last saved data stored in session:', lastSavedData);
+    console.log('💾 Storing last saved data:', lastSavedData);
+    localStorage.setItem('tagSaverLastSaved', JSON.stringify(lastSavedData));
+    console.log('✅ Data stored successfully');
   } catch (error) {
-    console.error('Error storing last saved data:', error);
+    console.error('❌ Error storing data:', error);
   }
 }
 
@@ -219,6 +219,9 @@ function handleSave(tags, poolData = null) {
     }
   }).then(response => {
     if (response && response.success) {
+      // 🔥 NEW: Store the saved data for future use
+      storeLastSavedData(tags, poolData);
+      
       // Check for duplicate warning even on successful save
       if (response.duplicateWarning && response.duplicateWarning.isDuplicate) {
         const message = response.duplicateWarning.exactMatch 

@@ -33,30 +33,48 @@ window.TagSaver.UI.Overlay = (function() {
   }
 
   /**
-   * Load last saved data from session storage (clears when browser closes)
+   * Load last saved data from localStorage
    */
   function loadLastSavedData() {
     try {
-      const stored = sessionStorage.getItem('tagSaverLastSaved');
+      const stored = localStorage.getItem('tagSaverLastSaved');
+      console.log('🔍 Loading stored data:', stored);
+      
       return stored ? JSON.parse(stored) : null;
     } catch (error) {
-      console.error('Error loading last saved data:', error);
+      console.error('❌ Error loading data:', error);
       return null;
     }
   }
 
-  /**
+/**
    * Load last saved tags and ID into the overlay
    */
   function loadLastTagsAndId() {
     const lastData = loadLastSavedData();
-    if (!lastData) return;
+    if (!lastData) {
+      Toast.showError("No previously saved data found");
+      return;
+    }
 
     // Load tags if available
     if (lastData.tags && lastData.tags.length > 0) {
       const tagDisplay = overlayElement.querySelector('#tag-display');
       if (tagDisplay) {
-        TagPills.renderTagPills(lastData.tags, tagDisplay);
+        // 🔥 FIXED: Provide proper callbacks for tag functionality
+        TagPills.renderTagPills(
+          lastData.tags, 
+          tagDisplay,
+          // onDeleteTag callback
+          (deletedTag) => {
+            console.log(`Tag deleted: ${deletedTag}`);
+          },
+          // onCategoryChange callback
+          (oldTag, newTag, newCategory) => {
+            console.log(`Tag category changed: ${oldTag} -> ${newTag}`);
+          }
+        );
+        Toast.showSuccess(`Loaded ${lastData.tags.length} tags from memory`);
       }
     }
 
@@ -67,7 +85,12 @@ window.TagSaver.UI.Overlay = (function() {
         poolIdInput.value = lastData.poolId;
         // Trigger the change event to auto-populate the index
         poolIdInput.dispatchEvent(new Event('change'));
+        Toast.showSuccess(`Loaded pool ID: ${lastData.poolId}`);
       }
+    }
+
+    if (!lastData.tags?.length && !lastData.poolId) {
+      Toast.showError("No tags or pool ID found in memory");
     }
   }
 
@@ -76,13 +99,17 @@ window.TagSaver.UI.Overlay = (function() {
    */
   function loadLastIdOnly() {
     const lastData = loadLastSavedData();
-    if (!lastData || !lastData.poolId) return;
+    if (!lastData || !lastData.poolId) {
+      Toast.showError("No pool ID found in memory");
+      return;
+    }
 
     const poolIdInput = overlayElement.querySelector('#pool-id');
     if (poolIdInput) {
       poolIdInput.value = lastData.poolId;
       // Trigger the change event to auto-populate the index
       poolIdInput.dispatchEvent(new Event('change'));
+      Toast.showSuccess(`Loaded pool ID: ${lastData.poolId}`);
     }
   }
 
@@ -307,9 +334,21 @@ function createOverlay(options = {}) {
     console.error("Input field not found!");
   }
   
-  // Set up the tag display
+  // Set up the tag display (UPDATED SECTION)
   if (tagDisplay) {
-    TagPills.renderTagPills(tags, tagDisplay);
+    // 🔥 FIXED: Provide proper callbacks for tag functionality
+    TagPills.renderTagPills(
+      tags, 
+      tagDisplay,
+      // onDeleteTag callback
+      (deletedTag) => {
+        console.log(`Tag deleted: ${deletedTag}`);
+      },
+      // onCategoryChange callback  
+      (oldTag, newTag, newCategory) => {
+        console.log(`Tag category changed: ${oldTag} -> ${newTag}`);
+      }
+    );
   } else {
     console.error("Tag display not found!");
   }
@@ -442,8 +481,19 @@ function createOverlay(options = {}) {
     
     // Only add if not already there
     if (!existingTags.includes(tag)) {
-      // Add the new tag
-      TagPills.addTag(tag, tagDisplay);
+      // 🔥 FIXED: Use addTag with proper callbacks instead of re-rendering all
+      TagPills.addTag(
+        tag, 
+        tagDisplay,
+        // onDeleteTag callback
+        (deletedTag) => {
+          console.log(`Tag deleted: ${deletedTag}`);
+        },
+        // onCategoryChange callback
+        (oldTag, newTag, newCategory) => {
+          console.log(`Tag category changed: ${oldTag} -> ${newTag}`);
+        }
+      );
     }
     
     // Reset input and dropdown
@@ -515,11 +565,23 @@ function createOverlay(options = {}) {
         // Get existing tags
         const existingTags = TagPills.getCurrentTagsFromDisplay(tagDisplay);
         
-        // Combine existing and new tags
-        const allTags = [...existingTags, ...newTags];
-        
-        // Render the tag pills
-        TagPills.renderTagPills(allTags, tagDisplay);
+        // Add each new tag that doesn't already exist
+        newTags.forEach(tag => {
+          if (!existingTags.includes(tag)) {
+            TagPills.addTag(
+              tag, 
+              tagDisplay,
+              // onDeleteTag callback
+              (deletedTag) => {
+                console.log(`Tag deleted: ${deletedTag}`);
+              },
+              // onCategoryChange callback
+              (oldTag, newTag, newCategory) => {
+                console.log(`Tag category changed: ${oldTag} -> ${newTag}`);
+              }
+            );
+          }
+        });
         
         // Clear input field and add a space for next entry
         input.value = '';
