@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Tag Saver",
-  "version": "1.0",
+  "version": "2.0",
   "description": "Save tags and images from websites to your local storage",
   "permissions": [
     "tabs",

@@ -1,14 +1,74 @@
-// Batch Upload Functionality
+// Batch Upload Functionality - Updated for new UI with dark mode support
+// UI functionality merged for CSP compliance in browser extensions
+
+// ============================================
+// Theme Toggle and UI Effects (merged from batch-upload-ui.js)
+// ============================================
+(function initUIEffects() {
+  'use strict';
+
+  // Theme toggle functionality
+  const themeCheckbox = document.getElementById('theme-checkbox');
+  
+  function toggleTheme() {
+    document.body.classList.toggle('dark');
+    try {
+      localStorage.setItem('batch-upload-theme', document.body.classList.contains('dark') ? 'dark' : 'light');
+    } catch (e) {
+      // localStorage not available in extension context, ignore
+    }
+  }
+
+  if (themeCheckbox) {
+    themeCheckbox.addEventListener('change', toggleTheme);
+  }
+
+  // Load saved theme
+  try {
+    if (localStorage.getItem('batch-upload-theme') === 'dark') {
+      document.body.classList.add('dark');
+      if (themeCheckbox) {
+        themeCheckbox.checked = true;
+      }
+    }
+  } catch (e) {
+    // localStorage not available in extension context, ignore
+  }
+
+  // Clear All button diffuse effect
+  const clearAllBtn = document.getElementById('clear-all-btn');
+  if (clearAllBtn) {
+    clearAllBtn.addEventListener('click', function() {
+      this.classList.remove('diffuse-active');
+      // Trigger reflow to restart animation
+      void this.offsetWidth;
+      this.classList.add('diffuse-active');
+      
+      // Remove class after animation completes
+      setTimeout(() => {
+        this.classList.remove('diffuse-active');
+      }, 400);
+    });
+  }
+})();
+
+// ============================================
+// Batch Uploader Class
+// ============================================
 class BatchUploader {
   constructor() {
     this.files = [];
     this.sharedTags = [];
     this.poolId = null;
+    this.sourceUrl = '';
     this.isProcessing = false;
+    
+    // Drag placeholder for reordering
+    this.dragPlaceholder = null;
+    this.draggedItem = null;
     
     this.initializeElements();
     this.setupEventListeners();
-    // Don't generate pool ID until first image is added
   }
 
   initializeElements() {
@@ -17,8 +77,9 @@ class BatchUploader {
     this.tagDisplay = document.getElementById('tag-display');
     this.tagInput = document.getElementById('tag-input');
     this.thumbnailGrid = document.getElementById('thumbnail-grid');
-    this.poolIdDisplay = document.getElementById('pool-id');
-    this.poolSection = document.getElementById('pool-section');
+    this.poolHashInput = document.getElementById('pool-hash-input'); // Changed from display to input
+    this.generateHashBtn = document.getElementById('generate-hash-btn');
+    this.sourceUrlInput = document.getElementById('source-url-input');
     this.imageCountDisplay = document.getElementById('image-count');
     this.processBtn = document.getElementById('process-btn');
     this.clearAllBtn = document.getElementById('clear-all-btn');
@@ -61,18 +122,28 @@ class BatchUploader {
       }
     });
 
+    // Generate Pool ID button - now overwrites input value
+    this.generateHashBtn.addEventListener('click', () => this.generatePoolId());
+
+    // Pool Hash input - track manual changes
+    this.poolHashInput.addEventListener('input', (e) => {
+      this.poolId = e.target.value.trim() || null;
+    });
+
+    // Source URL input
+    this.sourceUrlInput.addEventListener('input', (e) => {
+      this.sourceUrl = e.target.value.trim();
+    });
+
     // Action buttons
     this.processBtn.addEventListener('click', this.processImages.bind(this));
     this.clearAllBtn.addEventListener('click', this.clearAll.bind(this));
   }
 
   generatePoolId() {
-    if (!this.poolId) {
-      // Generate a unique random pool ID only when first image is added
-      this.poolId = Math.random().toString(36).substring(2, 10);
-      this.poolIdDisplay.textContent = this.poolId;
-      this.poolSection.style.display = 'block';
-    }
+    // Generate a unique random pool ID and overwrite input
+    this.poolId = Math.random().toString(36).substring(2, 10);
+    this.poolHashInput.value = this.poolId;
   }
 
   // Placeholder-specific drag handlers
@@ -93,13 +164,36 @@ class BatchUploader {
     e.stopPropagation();
     this.addPlaceholder.classList.remove('drag-over');
     
+    // Only handle file drops, not thumbnail reordering
     const files = Array.from(e.dataTransfer.files);
-    this.addFiles(files);
+    if (files.length > 0) {
+      this.addFiles(files);
+    }
   }
 
   // Grid-specific drag handlers (for when placeholder is hidden)
   handleGridDragOver(e) {
-    // Only handle if placeholder is hidden (files exist)
+    // If we're reordering, handle placeholder positioning
+    if (this.draggedItem && this.dragPlaceholder) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // If hovering over empty grid space (not over a thumbnail), position placeholder at end
+      if (!e.target.closest('.thumbnail-item') && e.target !== this.dragPlaceholder) {
+        const lastThumbnail = this.thumbnailGrid.querySelector('.thumbnail-item:last-of-type');
+        if (lastThumbnail && this.dragPlaceholder.previousSibling !== lastThumbnail) {
+          // Insert after the last thumbnail
+          if (lastThumbnail.nextSibling) {
+            this.thumbnailGrid.insertBefore(this.dragPlaceholder, lastThumbnail.nextSibling);
+          } else {
+            this.thumbnailGrid.appendChild(this.dragPlaceholder);
+          }
+        }
+      }
+      return;
+    }
+    
+    // Only handle file drag if placeholder is hidden (files exist)
     if (this.files.length > 0) {
       e.preventDefault();
       e.stopPropagation();
@@ -107,13 +201,23 @@ class BatchUploader {
   }
 
   handleGridDrop(e) {
-    // Only handle if placeholder is hidden (files exist) and not dropping on existing thumbnails
+    // If we're reordering (dragging a thumbnail), just prevent default
+    // The actual reorder is handled in dragend via syncFilesWithDOM
+    if (this.draggedItem) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    
+    // Only handle file drops if placeholder is hidden (files exist) and not dropping on existing thumbnails
     if (this.files.length > 0 && !e.target.closest('.thumbnail-item')) {
       e.preventDefault();
       e.stopPropagation();
       
       const files = Array.from(e.dataTransfer.files);
-      this.addFiles(files);
+      if (files.length > 0) {
+        this.addFiles(files);
+      }
     }
   }
 
@@ -131,11 +235,6 @@ class BatchUploader {
     if (validFiles.length === 0) {
       this.showStatus('No valid image or video files selected.', 'error');
       return;
-    }
-
-    // Generate pool ID when first image is added
-    if (this.files.length === 0 && validFiles.length > 0) {
-      this.generatePoolId();
     }
 
     // Add to files array with metadata
@@ -224,6 +323,7 @@ class BatchUploader {
           }
           
           ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
+          URL.revokeObjectURL(img.src);
           
           resolve(canvas.toDataURL('image/jpeg', 0.9)); // Higher quality
         };
@@ -277,18 +377,25 @@ class BatchUploader {
     // Return a simple colored rectangle as fallback
     const canvas = document.createElement('canvas');
     canvas.width = 150;
-    canvas.height = 100;
+    canvas.height = 197;
     const ctx = canvas.getContext('2d');
     
     ctx.fillStyle = type.startsWith('video/') ? '#e74c3c' : '#95a5a6';
-    ctx.fillRect(0, 0, 150, 100);
+    ctx.fillRect(0, 0, 150, 197);
     
     ctx.fillStyle = 'white';
     ctx.font = '14px Arial';
     ctx.textAlign = 'center';
-    ctx.fillText(type.startsWith('video/') ? 'Video' : 'Image', 75, 55);
+    ctx.fillText(type.startsWith('video/') ? 'Video' : 'Image', 75, 105);
     
     return canvas.toDataURL('image/jpeg', 0.8);
+  }
+
+  // Create drag placeholder element
+  createDragPlaceholder() {
+    const ph = document.createElement('div');
+    ph.className = 'drag-placeholder';
+    return ph;
   }
 
   renderThumbnails() {
@@ -326,7 +433,7 @@ class BatchUploader {
         this.removeFile(fileData.id);
       });
 
-      // Add drag and drop for reordering
+      // Add drag and drop for reordering with placeholder
       item.addEventListener('dragstart', this.handleThumbnailDragStart.bind(this));
       item.addEventListener('dragover', this.handleThumbnailDragOver.bind(this));
       item.addEventListener('drop', this.handleThumbnailDrop.bind(this));
@@ -345,39 +452,103 @@ class BatchUploader {
   }
 
   handleThumbnailDragStart(e) {
-    e.dataTransfer.setData('text/plain', e.currentTarget.dataset.fileId);
-    e.currentTarget.classList.add('dragging');
+    const item = e.currentTarget;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', item.dataset.fileId);
+    item.classList.add('dragging');
+    this.draggedItem = item;
+    
+    // Create placeholder and insert it where the dragged item was
+    this.dragPlaceholder = this.createDragPlaceholder();
+    this.dragPlaceholder.style.height = item.offsetHeight + 'px';
+    item.parentNode.insertBefore(this.dragPlaceholder, item.nextSibling);
+    
+    // Hide the dragged item after a brief moment (so drag image is captured)
+    setTimeout(() => {
+      if (this.draggedItem) {
+        this.draggedItem.style.display = 'none';
+      }
+    }, 0);
   }
 
   handleThumbnailDragOver(e) {
     e.preventDefault();
+    e.stopPropagation();
+    
+    if (!this.draggedItem || !this.dragPlaceholder) return;
+    
+    const targetItem = e.currentTarget;
+    if (targetItem === this.draggedItem || targetItem === this.dragPlaceholder) return;
+    
+    // Determine if we should insert before or after based on mouse position
+    const rect = targetItem.getBoundingClientRect();
+    const midpoint = rect.left + rect.width / 2;
+    
+    if (e.clientX < midpoint) {
+      // Insert placeholder before target
+      if (this.dragPlaceholder !== targetItem.previousSibling) {
+        this.thumbnailGrid.insertBefore(this.dragPlaceholder, targetItem);
+      }
+    } else {
+      // Insert placeholder after target
+      if (this.dragPlaceholder !== targetItem.nextSibling) {
+        this.thumbnailGrid.insertBefore(this.dragPlaceholder, targetItem.nextSibling);
+      }
+    }
   }
 
   handleThumbnailDrop(e) {
     e.preventDefault();
-    const draggedId = e.dataTransfer.getData('text/plain');
-    const targetId = e.currentTarget.dataset.fileId;
-
-    if (draggedId !== targetId) {
-      this.reorderFiles(draggedId, targetId);
-    }
+    e.stopPropagation();
+    // Actual reordering is handled in dragend based on placeholder position
   }
 
   handleThumbnailDragEnd(e) {
-    e.currentTarget.classList.remove('dragging');
+    if (this.draggedItem) {
+      this.draggedItem.classList.remove('dragging');
+      this.draggedItem.style.display = '';
+      
+      // If placeholder exists, insert the dragged item at placeholder position
+      if (this.dragPlaceholder && this.dragPlaceholder.parentNode) {
+        this.dragPlaceholder.parentNode.insertBefore(this.draggedItem, this.dragPlaceholder);
+      }
+      
+      this.draggedItem = null;
+    }
+    
+    if (this.dragPlaceholder && this.dragPlaceholder.parentNode) {
+      this.dragPlaceholder.parentNode.removeChild(this.dragPlaceholder);
+      this.dragPlaceholder = null;
+    }
+    
+    // Re-render to update indices based on current DOM order
+    this.syncFilesWithDOM();
   }
 
-  reorderFiles(draggedId, targetId) {
-    const draggedIndex = this.files.findIndex(f => f.id == draggedId);
-    const targetIndex = this.files.findIndex(f => f.id == targetId);
-
-    if (draggedIndex !== -1 && targetIndex !== -1) {
-      // Move the dragged item to the target position
-      const [draggedFile] = this.files.splice(draggedIndex, 1);
-      this.files.splice(targetIndex, 0, draggedFile);
-      
-      this.renderThumbnails();
+  // Sync the files array order with current DOM order
+  syncFilesWithDOM() {
+    const thumbnailItems = this.thumbnailGrid.querySelectorAll('.thumbnail-item');
+    const newOrder = [];
+    
+    thumbnailItems.forEach(item => {
+      const fileId = item.dataset.fileId;
+      const file = this.files.find(f => f.id == fileId);
+      if (file) {
+        newOrder.push(file);
+      }
+    });
+    
+    if (newOrder.length === this.files.length) {
+      this.files = newOrder;
     }
+    
+    // Update indices display
+    thumbnailItems.forEach((item, index) => {
+      const indexEl = item.querySelector('.thumbnail-index');
+      if (indexEl) {
+        indexEl.textContent = index + 1;
+      }
+    });
   }
 
   removeFile(fileId) {
@@ -541,6 +712,19 @@ class BatchUploader {
     };
   }
 
+  // Compute image hash from a File object using hash.js
+  async computeHashFromFile(file) {
+    try {
+      const url = URL.createObjectURL(file);
+      const hash = await window.TagSaver.Hash.computeAverageHash(url);
+      URL.revokeObjectURL(url);
+      return hash;
+    } catch (error) {
+      console.error('Error computing hash:', error);
+      return null;
+    }
+  }
+
   renderTags() {
     this.tagDisplay.innerHTML = '';
     
@@ -657,7 +841,7 @@ class BatchUploader {
     this.isProcessing = true;
     this.processBtn.disabled = true;
     this.clearAllBtn.disabled = true;
-    this.progressContainer.style.display = 'block';
+    this.progressContainer.classList.add('show');
     
     try {
       for (let i = 0; i < this.files.length; i++) {
@@ -666,17 +850,35 @@ class BatchUploader {
         
         this.updateProgress(progress, `Processing ${fileData.name}...`);
         
+        // Compute hash from the file
+        let imageHash = null;
+        try {
+          imageHash = await this.computeHashFromFile(fileData.file);
+          if (imageHash) {
+            console.log(`Hash computed for ${fileData.name}: ${imageHash}`);
+          }
+        } catch (error) {
+          console.error(`Failed to compute hash for ${fileData.name}:`, error);
+        }
+        
+        // Use the source URL if provided, otherwise use a file reference
+        const sourceUrl = this.sourceUrl || `file://${fileData.name}`;
+        
         // Create the data object for saving
         const saveData = {
-          url: `file://${fileData.name}`, // Local file reference
+          url: sourceUrl,
           tags: [...this.sharedTags], // Copy shared tags
           imageUrl: null, // Will be set to local file path after save
+          imageHash: imageHash, // Include the computed hash
           timestamp: new Date().toISOString(),
-          poolId: this.poolId,
-          poolIndex: i,
           localFile: true,
           fileName: fileData.name,
-          fileData: fileData.file
+          fileData: fileData.file,
+          // Only include pool data if pool ID is set
+          ...(this.poolId && {
+            poolId: this.poolId,
+            poolIndex: i
+          })
         };
 
         // Send to background script for processing
@@ -687,7 +889,10 @@ class BatchUploader {
       }
       
       this.updateProgress(100, 'All images processed successfully!');
-      this.showStatus(`Successfully processed ${this.files.length} images with pool ID: ${this.poolId}`, 'success');
+      const successMsg = this.poolId 
+        ? `Successfully processed ${this.files.length} images with pool ID: ${this.poolId}`
+        : `Successfully processed ${this.files.length} image(s)`;
+      this.showStatus(successMsg, 'success');
       
       // Auto-clear after successful processing
       setTimeout(() => {
@@ -703,7 +908,7 @@ class BatchUploader {
       this.clearAllBtn.disabled = false;
       
       setTimeout(() => {
-        this.progressContainer.style.display = 'none';
+        this.progressContainer.classList.remove('show');
       }, 2000);
     }
   }
@@ -739,82 +944,42 @@ class BatchUploader {
 
   updateProgress(percent, text) {
     this.progressBar.style.width = `${percent}%`;
-    this.progressText.textContent = text;
+    const textSpan = this.progressText.querySelector('span');
+    if (textSpan) {
+      textSpan.textContent = text;
+    }
   }
 
   showStatus(message, type) {
-    this.statusMessage.textContent = message;
-    this.statusMessage.className = `status-message ${type}`;
-    this.statusMessage.style.display = 'block';
+    const textSpan = this.statusMessage.querySelector('span');
+    if (textSpan) {
+      textSpan.textContent = message;
+    }
+    this.statusMessage.className = `status-message show ${type}`;
     
     setTimeout(() => {
-      this.statusMessage.style.display = 'none';
+      this.statusMessage.classList.remove('show');
     }, 5000);
   }
 
   clearAll() {
     this.files = [];
     this.sharedTags = [];
-    this.poolId = null; // Reset pool ID
-    this.poolIdDisplay.textContent = 'Not assigned yet';
-    this.poolSection.style.display = 'none'; // Hide pool section
+    this.poolId = null;
+    this.sourceUrl = '';
+    
+    // Reset UI elements - now using input instead of display
+    this.poolHashInput.value = '';
+    this.sourceUrlInput.value = '';
+    
     this.renderTags();
     this.renderThumbnails();
     this.updateUI();
     this.tagInput.value = '';
-    this.progressContainer.style.display = 'none';
-    this.statusMessage.style.display = 'none';
+    this.progressContainer.classList.remove('show');
+    this.statusMessage.classList.remove('show');
   }
 }
-
-// Tag pill styles (reusing from main extension)
-const tagStyles = `
-  .tag-pill {
-    display: inline-flex;
-    align-items: center;
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 12px;
-    white-space: nowrap;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-    margin: 2px;
-    transition: transform 0.1s ease;
-  }
-
-  .tag-pill:hover {
-    transform: translateY(-1px);
-  }
-
-  .tag-artist { background-color: rgba(255, 117, 117, 0.9); color: white; }
-  .tag-character { background-color: rgba(121, 187, 255, 0.9); color: white; }
-  .tag-copyright { background-color: rgba(179, 136, 255, 0.9); color: white; }
-  .tag-general { background-color: rgba(153, 153, 153, 0.9); color: white; }
-  .tag-meta { background-color: rgba(251, 192, 45, 0.9); color: white; }
-
-  .tag-delete {
-    cursor: pointer;
-    margin-left: 4px;
-    opacity: 0.7;
-  }
-
-  .tag-delete:hover {
-    opacity: 1;
-  }
-
-  .tag-content {
-    cursor: pointer;
-    user-select: none;
-  }
-
-  .tag-content:hover {
-    opacity: 0.8;
-  }
-`;
-
-// Inject tag styles
-const styleElement = document.createElement('style');
-styleElement.textContent = tagStyles;
-document.head.appendChild(styleElement);
 
 // Initialize the batch uploader when the page loads
 let batchUploader;

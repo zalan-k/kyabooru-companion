@@ -2,6 +2,8 @@
  * Overlay Component
  * Manages the tag input overlay UI
  */
+const autocompleteCache = new Map();
+const AUTOCOMPLETE_CACHE_TTL = 60000; // 1 minute
 window.TagSaver = window.TagSaver || {};
 window.TagSaver.UI = window.TagSaver.UI || {};
 
@@ -309,12 +311,22 @@ function createOverlay(options = {}) {
   poolIdInput.addEventListener('change', async () => {
     if (!poolIdInput.value.trim()) return;
     
+    // Show loading state
+    poolIndexInput.placeholder = 'Loading...';
+    poolIndexInput.disabled = true;
+    
     try {
+      console.log('🔄 Fetching pool index...');
+      const startTime = performance.now();
+      
       // Get the highest index in this pool
       const result = await browser.runtime.sendMessage({
         action: 'get-pool-highest-index',
         poolId: poolIdInput.value.trim()
       });
+      
+      const duration = performance.now() - startTime;
+      console.log(`📊 Pool index fetched in ${duration.toFixed(1)}ms`);
       
       // Set next available index
       if (result.success && result.highestIndex !== null) {
@@ -325,6 +337,10 @@ function createOverlay(options = {}) {
       }
     } catch (error) {
       console.error('Error getting pool index:', error);
+      poolIndexInput.value = '0';
+    } finally {
+      poolIndexInput.placeholder = 'Position in pool';
+      poolIndexInput.disabled = false;
     }
   });
 
@@ -403,7 +419,7 @@ function createOverlay(options = {}) {
   }
 
   // Handle autocomplete suggestions
-  function updateAutocompleteSuggestions() {
+  async function updateAutocompleteSuggestions() {
     const query = input.value.trim();
     
     if (query.length < 2) {
@@ -412,54 +428,82 @@ function createOverlay(options = {}) {
       return;
     }
     
-    // Request tag suggestions from background script
-    browser.runtime.sendMessage({
-      action: 'search-tags',
-      query: query
-    }).then(suggestions => {
+    // Check local cache first
+    const cacheKey = query.toLowerCase();
+    const cached = autocompleteCache.get(cacheKey);
+    
+    if (cached && (Date.now() - cached.timestamp) < AUTOCOMPLETE_CACHE_TTL) {
+      console.log(`🚀 Local cache hit for: ${query}`);
+      renderSuggestions(cached.data);
+      return;
+    }
+    
+    try {
+      console.log(`🔍 Searching server for: ${query}`);
+      const startTime = performance.now();
+      
+      // Request tag suggestions from background script
+      const suggestions = await browser.runtime.sendMessage({
+        action: 'search-tags',
+        query: query
+      });
+      
+      const duration = performance.now() - startTime;
+      console.log(`📊 Search completed in ${duration.toFixed(1)}ms`);
+      
       if (suggestions && suggestions.length > 0) {
-        // Render suggestions in dropdown
-        autocompleteDropdown.innerHTML = '';
-        
-        suggestions.forEach(tag => {
-          const item = document.createElement('div');
-          item.className = 'autocomplete-item';
-          
-          // Format tag display (category:name)
-          let displayText = tag;
-          let category = 'general';
-          
-          if (tag.includes(':')) {
-            const [cat, name] = tag.split(':', 2);
-            category = cat;
-            displayText = name;
-          }
-          
-          item.innerHTML = `
-            <span class="tag-name">${displayText}</span>
-            <span class="autocomplete-category">${category}</span>
-          `;
-          
-          // Add click handler to select tag
-          item.addEventListener('click', () => {
-            selectTag(tag);
-          });
-          
-          autocompleteDropdown.appendChild(item);
+        // Cache the result locally
+        autocompleteCache.set(cacheKey, {
+          data: suggestions,
+          timestamp: Date.now()
         });
         
-        autocompleteDropdown.style.display = 'block';
-        selectedIndex = -1;
+        renderSuggestions(suggestions);
       } else {
         autocompleteDropdown.style.display = 'none';
         selectedIndex = -1;
       }
-    }).catch(error => {
+    } catch (error) {
       console.error('Autocomplete error:', error);
       autocompleteDropdown.style.display = 'none';
-    });
+    }
   }
   
+  // Add this helper function to overlay.js:
+  function renderSuggestions(suggestions) {
+    autocompleteDropdown.innerHTML = '';
+    
+    suggestions.forEach(tag => {
+      const item = document.createElement('div');
+      item.className = 'autocomplete-item';
+      
+      // Format tag display (category:name)
+      let displayText = tag;
+      let category = 'general';
+      
+      if (tag.includes(':')) {
+        const [cat, name] = tag.split(':', 2);
+        category = cat;
+        displayText = name;
+      }
+      
+      item.innerHTML = `
+        <span class="tag-name">${displayText}</span>
+        <span class="autocomplete-category">${category}</span>
+      `;
+      
+      // Add click handler to select tag
+      item.addEventListener('click', () => {
+        selectTag(tag);
+      });
+      
+      autocompleteDropdown.appendChild(item);
+    });
+    
+    autocompleteDropdown.style.display = 'block';
+    selectedIndex = -1;
+  }
+
   // Debounce function to limit API calls
   function debounce(func, wait) {
     let timeout;

@@ -3,167 +3,750 @@
 <head>
   <meta charset="UTF-8">
   <title>Tag Saver Options</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
   <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    :root {
+      --primary: #64748b;
+      --primary-hover: #475569;
+      --primary-light: #e2e8f0;
+      --primary-subtle: #f8fafc;
+      --primary-glow: rgba(100, 116, 139, 0.3);
+      --text-primary: #334155;
+      --text-secondary: #64748b;
+      --text-muted: #94a3b8;
+      --border: #e2e8f0;
+      --border-strong: #cbd5e1;
+      --bg-page: #f1f5f9;
+      --bg-card: #ffffff;
+      --bg-section: #f8fafc;
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+      --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.06);
+      --shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.08);
+      --radius-sm: 6px;
+      --radius-md: 8px;
+      --transition: 0.2s ease;
+      --noise-opacity: 0.03;
+    }
+
+    .dark {
+      --primary: #94a3b8;
+      --primary-hover: #cbd5e1;
+      --primary-light: #334155;
+      --primary-subtle: #1e293b;
+      --primary-glow: rgba(148, 163, 184, 0.25);
+      --text-primary: #e2e8f0;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --border: #334155;
+      --border-strong: #475569;
+      --bg-page: #0f172a;
+      --bg-card: #1e293b;
+      --bg-section: #1e293b;
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+      --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.25);
+      --shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.3);
+      --noise-opacity: 0.04;
+    }
+
+    * {
+      box-sizing: border-box;
       margin: 0;
-      padding: 20px;
-      color: #333;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      padding: 16px;
+      background: var(--bg-page);
+      color: var(--text-primary);
       font-size: 14px;
-      max-width: 600px;
+      min-height: 100vh;
+      position: relative;
+      transition: background var(--transition), color var(--transition);
     }
-    
-    h1 {
-      font-size: 18px;
-      margin-bottom: 20px;
-      color: #444;
-    }
-    
-    .option-group {
-      margin-bottom: 20px;
-      padding-bottom: 20px;
-      border-bottom: 1px solid #eee;
-    }
-    
-    .option-row {
-      margin-bottom: 15px;
-    }
-    
-    label {
-      display: block;
-      margin-bottom: 5px;
-      font-weight: 500;
-    }
-    
-    input[type="text"] {
+
+    /* Noise overlay */
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
       width: 100%;
-      padding: 8px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      font-size: 14px;
+      height: 100%;
+      pointer-events: none;
+      z-index: 0;
+      opacity: var(--noise-opacity);
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.2' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+      transition: opacity 0.3s ease;
     }
-    
-    .checkbox-label {
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      background: var(--bg-card);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-lg);
+      overflow: hidden;
+      position: relative;
+      z-index: 1;
+      transition: background var(--transition), box-shadow var(--transition);
+    }
+
+    .container::before {
+      content: '';
+      display: block;
+      height: 3px;
+      background: var(--primary);
+      transition: background var(--transition);
+    }
+
+    .container-inner {
+      padding: 16px 24px 20px;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+      transition: border-color var(--transition);
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .header-icon {
+      width: 36px;
+      height: 36px;
+      background: var(--primary);
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: var(--shadow-sm);
+      transition: background var(--transition);
+    }
+
+    .header-icon svg {
+      width: 20px;
+      height: 20px;
+      color: white;
+    }
+
+    .dark .header-icon svg {
+      color: var(--bg-card);
+    }
+
+    h1 {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--text-primary);
+      letter-spacing: -0.3px;
+      transition: color var(--transition);
+    }
+
+    /* Theme Toggle */
+    .theme-toggle {
       display: flex;
       align-items: center;
       gap: 8px;
-      font-weight: normal;
     }
-    
-    button {
-      background: #4a89dc;
-      color: white;
-      border: none;
-      padding: 8px 16px;
-      border-radius: 4px;
+
+    .theme-toggle-label {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .toggle-switch {
+      position: relative;
+      width: 44px;
+      height: 24px;
       cursor: pointer;
-      font-size: 14px;
     }
-    
-    button:hover {
-      background: #3b7dd8;
+
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
     }
-    
-    .status {
-      margin-top: 15px;
-      padding: 10px;
-      border-radius: 4px;
-      display: none;
+
+    .toggle-rail {
+      position: absolute;
+      top: 50%;
+      left: 0;
+      right: 0;
+      height: 14px;
+      transform: translateY(-50%);
+      background: var(--border-strong);
+      border-radius: 7px;
+      transition: background var(--transition);
     }
-    
-    .success {
-      background: #d4edda;
-      color: #155724;
-      display: block;
+
+    .toggle-knob {
+      position: absolute;
+      top: 50%;
+      left: 2px;
+      width: 20px;
+      height: 20px;
+      transform: translateY(-50%);
+      background: var(--text-primary);
+      border-radius: 50%;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+      transition: left 0.2s cubic-bezier(0.4, 0, 0.2, 1), background var(--transition);
     }
-    
-    .error {
-      background: #f8d7da;
-      color: #721c24;
-      display: block;
+
+    .toggle-switch input:checked ~ .toggle-rail {
+      background: var(--primary);
     }
-    
+
+    .toggle-switch input:checked ~ .toggle-knob {
+      left: 22px;
+      background: var(--bg-card);
+    }
+
+    .dark .toggle-knob {
+      background: var(--text-primary);
+    }
+
+    .dark .toggle-switch input:checked ~ .toggle-knob {
+      background: var(--text-primary);
+    }
+
+    /* Option Groups */
+    .option-group {
+      margin-bottom: 20px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+      transition: border-color var(--transition);
+    }
+
+    .option-group:last-of-type {
+      margin-bottom: 16px;
+      padding-bottom: 0;
+      border-bottom: none;
+    }
+
     .section-title {
-      font-weight: bold;
-      margin-bottom: 10px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-bottom: 12px;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: color var(--transition);
     }
-    
+
+    .section-title::before {
+      content: '';
+      width: 2px;
+      height: 12px;
+      background: var(--primary);
+      border-radius: 1px;
+      transition: background var(--transition);
+    }
+
+    .option-row {
+      margin-bottom: 14px;
+    }
+
+    .option-row:last-child {
+      margin-bottom: 0;
+    }
+
+    /* Labels */
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-weight: 500;
+      color: var(--text-primary);
+      font-size: 13px;
+      transition: color var(--transition);
+    }
+
+    /* Text inputs */
+    input[type="text"] {
+      width: 100%;
+      height: 38px;
+      padding: 0 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-family: inherit;
+      outline: none;
+      background: var(--bg-card);
+      color: var(--text-primary);
+      transition: border-color var(--transition), background var(--transition), color var(--transition);
+    }
+
+    input[type="text"]::placeholder {
+      color: var(--text-muted);
+    }
+
+    input[type="text"]:focus {
+      border-color: var(--primary);
+    }
+
+    /* Checkboxes */
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 500;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .checkbox-wrapper {
+      position: relative;
+      width: 18px;
+      height: 18px;
+      flex-shrink: 0;
+    }
+
+    .checkbox-wrapper input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+      position: absolute;
+    }
+
+    .checkbox-custom {
+      position: absolute;
+      inset: 0;
+      background: var(--bg-card);
+      border: 1px solid var(--border-strong);
+      border-radius: 4px;
+      transition: all var(--transition);
+    }
+
+    .checkbox-custom::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 6px;
+      width: 4px;
+      height: 8px;
+      border: solid var(--bg-card);
+      border-width: 0 2px 2px 0;
+      transform: rotate(45deg) scale(0);
+      transition: transform 0.15s ease;
+    }
+
+    .checkbox-wrapper input:checked ~ .checkbox-custom {
+      background: var(--primary);
+      border-color: var(--primary);
+    }
+
+    .checkbox-wrapper input:checked ~ .checkbox-custom::after {
+      transform: rotate(45deg) scale(1);
+    }
+
+    .checkbox-wrapper input:focus ~ .checkbox-custom {
+      border-color: var(--primary);
+    }
+
+    /* Range slider */
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      outline: none;
+      margin: 8px 0;
+      transition: background var(--transition);
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 18px;
+      height: 18px;
+      background: var(--primary);
+      border-radius: 50%;
+      cursor: pointer;
+      box-shadow: var(--shadow-sm);
+      transition: transform 0.15s ease, background var(--transition);
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.1);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      background: var(--primary);
+      border-radius: 50%;
+      cursor: pointer;
+      border: none;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .slider-values {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 4px;
+      transition: color var(--transition);
+    }
+
+    .slider-values #thresholdValue {
+      background: var(--primary-light);
+      color: var(--primary);
+      padding: 2px 8px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 11px;
+      transition: background var(--transition), color var(--transition);
+    }
+
+    /* Help text */
     .help-text {
-      color: #666;
+      color: var(--text-muted);
       font-size: 12px;
-      margin-top: 5px;
+      margin-top: 6px;
+      line-height: 1.4;
+      transition: color var(--transition);
+    }
+
+    /* Save button */
+    .btn {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      background: var(--bg-section);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      overflow: hidden;
+      z-index: 1;
+      transition: background var(--transition), color var(--transition);
+    }
+
+    .btn:not(.diffuse-active) {
+      transition: background var(--transition), color var(--transition), border-color var(--transition);
+    }
+
+    .btn:hover {
+      background: var(--bg-card);
+      border-color: var(--primary);
+    }
+
+    .btn svg {
+      width: 16px;
+      height: 16px;
+      position: relative;
+      z-index: 2;
+    }
+
+    .btn span {
+      position: relative;
+      z-index: 2;
+    }
+
+    /* Diffuse fill layer */
+    .btn::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      pointer-events: none;
+      z-index: 1;
+      box-shadow: inset 0 0 0 0 var(--primary);
+      opacity: 0;
+    }
+
+    .btn.diffuse-active::after {
+      animation: borderDiffuseFill 1s cubic-bezier(0.25, 0.1, 0.25, 1) forwards;
+    }
+
+    .btn.diffuse-active {
+      animation: borderDiffuseStroke 1s cubic-bezier(0.25, 0.1, 0.25, 1) forwards;
+    }
+
+    .btn.diffuse-active:hover {
+      animation: borderDiffuseStrokeHover 1s cubic-bezier(0.25, 0.1, 0.25, 1) forwards;
+    }
+
+    @keyframes borderDiffuseFill {
+      0% {
+        box-shadow: inset 0 0 0 0 var(--primary);
+        opacity: 1;
+      }
+      50% {
+        box-shadow: inset 0 0 0 60px var(--primary);
+        opacity: 0.2;
+      }
+      80% {
+        box-shadow: inset 0 0 0 60px var(--primary);
+        opacity: 0.2;
+      }
+      100% {
+        box-shadow: inset 0 0 0 60px var(--primary);
+        opacity: 0;
+      }
+    }
+
+    @keyframes borderDiffuseStroke {
+      0% {
+        border-color: var(--primary);
+      }
+      50% {
+        border-color: color-mix(in srgb, var(--primary) 20%, transparent);
+      }
+      100% {
+        border-color: var(--border);
+      }
+    }
+
+    @keyframes borderDiffuseStrokeHover {
+      0% {
+        border-color: var(--primary);
+      }
+      50% {
+        border-color: color-mix(in srgb, var(--primary) 20%, transparent);
+      }
+      100% {
+        border-color: var(--primary);
+      }
+    }
+
+    /* Status messages */
+    .status {
+      margin-top: 14px;
+      padding: 10px 14px;
+      border-radius: var(--radius-sm);
+      display: none;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      transition: all var(--transition);
+    }
+
+    .status.show {
+      display: flex;
+    }
+
+    .status.success {
+      background: var(--primary-subtle);
+      color: var(--primary);
+      border: 1px solid var(--border);
+    }
+
+    .status.error {
+      background: #fef2f2;
+      color: #dc2626;
+      border: 1px solid #fecaca;
+    }
+
+    .dark .status.error {
+      background: #3b1f1f;
+      color: #f87171;
+      border: 1px solid #5c2828;
+    }
+
+    .status svg {
+      width: 16px;
+      height: 16px;
+      flex-shrink: 0;
     }
   </style>
 </head>
 <body>
-  <h1>Tag Saver Options</h1>
-  
-  <div class="option-group">
-    <div class="section-title">File Storage</div>
-    <div class="option-row">
-      <label for="saveFolder">Save Folder</label>
-      <input type="text" id="saveFolder" placeholder="e.g., TagSaver or Images/TagSaver">
-      <div class="help-text">Relative to browser's default download location</div>
-    </div>
-  </div>
-
-  <div class="option-group">
-    <div class="section-title">Server Integration</div>
-    <div class="option-row">
-      <label class="checkbox-label">
-        <input type="checkbox" id="useLocalServer">
-        Use Local Server (Recommended)
-      </label>
-      <div class="help-text">Requires Tag Saver Server running on localhost:3737. Provides better performance and data persistence.</div>
-    </div>
-  </div>
-  
-  <div class="option-group">
-    <div class="section-title">Website Integration</div>
-    <div class="option-row">
-      <label class="checkbox-label">
-        <input type="checkbox" id="autoDetect">
-        Automatically detect tags from supported websites
-      </label>
-    </div>
-    <div class="help-text">Currently supports: Twitter (experimental), Danbooru, Gelbooru, Rule34, Rule34paheal (experimental), Hentai-Foundry, Pixiv</div>
-  </div>
-  
-  <div class="option-group">
-    <div class="section-title">User Interface</div>
-    <div class="option-row">
-      <label class="checkbox-label">
-        <input type="checkbox" id="notificationsEnabled">
-        Show notification toasts
-      </label>
-    </div>
-  </div>
-  
-  <div class="option-group">
-    <div class="section-title">Duplicate Detection</div>
-    <div class="option-row">
-      <label class="checkbox-label">
-        <input type="checkbox" id="duplicateDetection">
-        Check for duplicate images
-      </label>
-      <div class="help-text">Uses visual similarity to detect duplicates</div>
-    </div>
-    
-    <div class="option-row">
-      <label>Similarity Threshold</label>
-      <input type="range" id="similarityThreshold" min="0" max="20" value="10">
-      <div class="slider-values">
-        <span>Strict</span>
-        <span id="thresholdValue">10</span>
-        <span>Lenient</span>
+  <div class="container">
+    <div class="container-inner">
+      <div class="header">
+        <div class="header-left">
+          <div class="header-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+          </div>
+          <h1>Settings</h1>
+        </div>
+        <div class="theme-toggle">
+          <span class="theme-toggle-label">Theme</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="theme-checkbox">
+            <span class="toggle-rail"></span>
+            <span class="toggle-knob"></span>
+          </label>
+        </div>
       </div>
-      <div class="help-text">Lower = Only match nearly identical images, Higher = Match more similar images</div>
+      
+      <div class="option-group">
+        <div class="section-title">File Storage</div>
+        <div class="option-row">
+          <label for="saveFolder">Save Folder</label>
+          <input type="text" id="saveFolder" placeholder="e.g., TagSaver or Images/TagSaver">
+          <div class="help-text">Relative to browser's default download location</div>
+        </div>
+      </div>
+
+      <div class="option-group">
+        <div class="section-title">Server Integration</div>
+        <div class="option-row">
+          <label class="checkbox-label">
+            <span class="checkbox-wrapper">
+              <input type="checkbox" id="useLocalServer">
+              <span class="checkbox-custom"></span>
+            </span>
+            Use Local Server (Recommended)
+          </label>
+          <div class="help-text">Requires Tag Saver Server running on localhost:3737. Provides better performance and data persistence.</div>
+        </div>
+      </div>
+      
+      <div class="option-group">
+        <div class="section-title">Website Integration</div>
+        <div class="option-row">
+          <label class="checkbox-label">
+            <span class="checkbox-wrapper">
+              <input type="checkbox" id="autoDetect">
+              <span class="checkbox-custom"></span>
+            </span>
+            Automatically detect tags from supported websites
+          </label>
+          <div class="help-text">Currently supports: Twitter (experimental), Danbooru, Gelbooru, Rule34, Rule34paheal (experimental), Hentai-Foundry, Pixiv</div>
+        </div>
+      </div>
+      
+      <div class="option-group">
+        <div class="section-title">User Interface</div>
+        <div class="option-row">
+          <label class="checkbox-label">
+            <span class="checkbox-wrapper">
+              <input type="checkbox" id="notificationsEnabled">
+              <span class="checkbox-custom"></span>
+            </span>
+            Show notification toasts
+          </label>
+        </div>
+      </div>
+      
+      <div class="option-group">
+        <div class="section-title">Duplicate Detection</div>
+        <div class="option-row">
+          <label class="checkbox-label">
+            <span class="checkbox-wrapper">
+              <input type="checkbox" id="duplicateDetection">
+              <span class="checkbox-custom"></span>
+            </span>
+            Check for duplicate images
+          </label>
+          <div class="help-text">Uses visual similarity to detect duplicates</div>
+        </div>
+        
+        <div class="option-row">
+          <label>Similarity Threshold</label>
+          <input type="range" id="similarityThreshold" min="0" max="20" value="10">
+          <div class="slider-values">
+            <span>Strict</span>
+            <span id="thresholdValue">10</span>
+            <span>Lenient</span>
+          </div>
+          <div class="help-text">Lower = Only match nearly identical images, Higher = Match more similar images</div>
+        </div>
+      </div>
+
+      <button class="btn" id="save">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+          <polyline points="17 21 17 13 7 13 7 21"/>
+          <polyline points="7 3 7 8 15 8"/>
+        </svg>
+        <span>Save Options</span>
+      </button>
+      <div id="status" class="status">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+          <polyline points="22 4 12 14.01 9 11.01"/>
+        </svg>
+        <span></span>
+      </div>
     </div>
   </div>
-
-  <button id="save">Save Options</button>
-  <div id="status" class="status"></div>
   
   <script src="options.js"></script>
+  <script>
+    // Theme toggle functionality
+    const themeCheckbox = document.getElementById('theme-checkbox');
+    
+    function applyTheme(theme) {
+      if (theme === 'dark') {
+        document.documentElement.classList.add('dark');
+        themeCheckbox.checked = true;
+      } else {
+        document.documentElement.classList.remove('dark');
+        themeCheckbox.checked = false;
+      }
+    }
+
+    // Load saved theme
+    browser.storage.sync.get(['theme']).then((result) => {
+      if (result.theme) {
+        applyTheme(result.theme);
+      } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        applyTheme('dark');
+      } else {
+        applyTheme('light');
+      }
+    }).catch(() => {
+      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        applyTheme('dark');
+      }
+    });
+
+    // Save theme on toggle
+    themeCheckbox.addEventListener('change', () => {
+      const theme = themeCheckbox.checked ? 'dark' : 'light';
+      applyTheme(theme);
+      browser.storage.sync.set({ theme }).catch(console.error);
+    });
+
+    // Add diffuse effect to save button
+    document.querySelectorAll('.btn').forEach(btn => {
+      btn.addEventListener('click', function(e) {
+        this.classList.remove('diffuse-active');
+        void this.offsetWidth;
+        this.classList.add('diffuse-active');
+      });
+
+      btn.addEventListener('animationend', function() {
+        this.classList.remove('diffuse-active');
+      });
+    });
+
+    // Slider value display
+    const slider = document.getElementById('similarityThreshold');
+    const thresholdValue = document.getElementById('thresholdValue');
+    slider.addEventListener('input', () => {
+      thresholdValue.textContent = slider.value;
+    });
+  </script>
 </body>
 </html>

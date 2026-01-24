@@ -41,6 +41,25 @@ function initDB() {
   };
 }
 
+async function warmupServer() {
+  if (!settings.useLocalServer) return;
+  
+  try {
+    console.log('🔥 Warming up server connection...');
+    const response = await fetch(`${settings.serverUrl}/api/warmup`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      console.log('✅ Server warmed up:', data);
+    }
+  } catch (error) {
+    console.log('⚠️ Server warmup failed (server might not be running):', error.message);
+  }
+}
+
 // Export database
 async function exportDatabase() {
   if (settings.useLocalServer) {
@@ -183,16 +202,31 @@ async function checkServerConnection() {
 }
 
 // Updated apiRequest to handle 409 errors specially
+let keepAliveAgent = null;
+// Updated apiRequest with connection reuse and timeout optimization
 async function apiRequest(endpoint, options = {}) {
   const url = `${settings.serverUrl}${endpoint}`;
+  
   const defaultOptions = {
     headers: {
       'Content-Type': 'application/json',
+      'Connection': 'keep-alive'
     },
+    // Shorter timeout for local server
+    timeout: 5000,
   };
   
   try {
-    const response = await fetch(url, { ...defaultOptions, ...options });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    
+    const response = await fetch(url, { 
+      ...defaultOptions, 
+      ...options,
+      signal: controller.signal 
+    });
+    
+    clearTimeout(timeoutId);
     
     // Handle 409 (duplicate) specially - don't throw, return the error data
     if (response.status === 409) {
@@ -210,6 +244,11 @@ async function apiRequest(endpoint, options = {}) {
     
     return await response.json();
   } catch (error) {
+    if (error.name === 'AbortError') {
+      console.error(`API Timeout (${endpoint}):`, error);
+      throw new Error(`Request timeout: ${endpoint}`);
+    }
+    
     console.error(`API Error (${endpoint}):`, error);
     throw error;
   }
@@ -920,11 +959,24 @@ async function handleSaveBatchImage(data) {
     
     // Generate filenames for batch upload
     const timestamp = new Date().getTime();
-    const baseFilename = `batch_${data.poolId}_${String(data.poolIndex).padStart(3, '0')}_${timestamp}`;
+    
+    // Handle case where poolId might not exist
+    let baseFilename;
+    if (data.poolId) {
+      baseFilename = `batch_${data.poolId}_${String(data.poolIndex).padStart(3, '0')}_${timestamp}`;
+    } else {
+      baseFilename = `batch_${timestamp}`;
+    }
     
     // Get file extension from original filename
     const extension = data.fileName.split('.').pop().toLowerCase();
     const finalFilename = `${baseFilename}.${extension}`;
+    
+    // Get the image hash from the data (computed in batch-upload.js)
+    const imageHash = data.imageHash || null;
+    if (imageHash) {
+      console.log(`📋 Image hash received: ${imageHash}`);
+    }
     
     // Save the actual file
     let mediaSuccess = true;
@@ -945,16 +997,20 @@ async function handleSaveBatchImage(data) {
       return [tag.toLowerCase()];
     }).flat();
 
-    // Prepare data for database
+    // Prepare data for database - now includes imageHash
     const dbData = {
       url: data.url,
       tags: data.tags,
       tagText: tagTexts,
       imageUrl: `${settings.saveFolder}/${finalFilename}`, // Local file path
       timestamp: data.timestamp,
-      poolId: data.poolId,
-      poolIndex: data.poolIndex,
-      localFile: true
+      imageHash: imageHash, // ✅ Include hash in database
+      localFile: true,
+      // Only include pool data if provided
+      ...(data.poolId && {
+        poolId: data.poolId,
+        poolIndex: data.poolIndex
+      })
     };
     
     // Save to database
@@ -977,17 +1033,21 @@ async function handleSaveBatchImage(data) {
       }
     });
     
-    // Save JSON metadata
+    // Save JSON metadata - now includes imageHash
     const jsonData = {
       sourceUrl: data.url,
       tags: categorizedTags,
       imageUrl: `${settings.saveFolder}/${finalFilename}`,
       mediaType: mediaType,
       timestamp: data.timestamp,
-      poolId: data.poolId,
-      poolIndex: data.poolIndex,
+      imageHash: imageHash, // ✅ Include hash in JSON
       originalFileName: data.fileName,
-      localFile: true
+      localFile: true,
+      // Only include pool data if provided
+      ...(data.poolId && {
+        poolId: data.poolId,
+        poolIndex: data.poolIndex
+      })
     };
     
     const jsonSuccess = await saveJSON(jsonData, `${baseFilename}.json`);
@@ -1000,7 +1060,8 @@ async function handleSaveBatchImage(data) {
       mediaSuccess,
       mediaType,
       jsonSuccess,
-      filename: finalFilename
+      filename: finalFilename,
+      imageHash: imageHash // ✅ Return hash in response
     };
     
   } catch (error) {
@@ -1407,5 +1468,11 @@ browser.runtime.onInstalled.addListener(async (details) => {
 (async function() {
   initDB();
   await loadSettings();
-  setupContextMenu(); // Add this line
+  setupContextMenu();
+  
+  // Warm up server connection immediately
+  setTimeout(warmupServer, 500);
+  
+  // Warm up server periodically (every 2 minutes) to keep connection alive
+  setInterval(warmupServer, 120000);
 })();
