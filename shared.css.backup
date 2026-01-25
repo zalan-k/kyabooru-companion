@@ -1,0 +1,1170 @@
+/* ============================================
+   SHARED DESIGN SYSTEM - SLATE THEME
+   Used across: popup, options, batch-upload, staging-manager
+   ============================================ */
+
+/* Font Import */
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap');
+
+/* ============================================
+   CSS VARIABLES - SLATE COLOR SCHEME
+   ============================================ */
+:root {
+  --primary: #64748b;
+  --primary-hover: #475569;
+  --primary-light: #e2e8f0;
+  --primary-subtle: #f8fafc;
+  --primary-glow: rgba(100, 116, 139, 0.3);
+  --text-primary: #334155;
+  --text-secondary: #64748b;
+  --text-muted: #94a3b8;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --bg-page: #f1f5f9;
+  --bg-card: #ffffff;
+  --bg-section: #f8fafc;
+  
+  /* Semantic colors */
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.08);
+  
+  /* Radii */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 50px;
+  
+  /* Transitions */
+  --transition: 0.2s ease;
+  
+  /* Button highlight colors - light on dark button */
+  --heat-color: rgba(255, 255, 255, 0.6);
+  --heat-color-soft: rgba(255, 255, 255, 0.15);
+  
+  /* Tab bar specific */
+  --tab-bar-bg: #e2e8f0;
+  --tab-pill-bg: rgba(100, 116, 139, 0.9);
+  --tab-pill-glow: rgba(100, 116, 139, 0.4);
+  --tab-pill-text: #ffffff;
+  --tab-inactive-text: #64748b;
+  
+  /* Tag colors */
+  --tag-artist: rgba(255, 117, 117, 0.9);
+  --tag-character: rgba(121, 187, 255, 0.9);
+  --tag-copyright: rgba(179, 136, 255, 0.9);
+  --tag-general: rgba(153, 153, 153, 0.9);
+  --tag-meta: rgba(251, 192, 45, 0.9);
+  
+  /* Noise opacity */
+  --noise-opacity: 0.03;
+}
+
+/* Dark Mode */
+.dark {
+  --primary: #94a3b8;
+  --primary-hover: #cbd5e1;
+  --primary-light: #334155;
+  --primary-subtle: #1e293b;
+  --primary-glow: rgba(148, 163, 184, 0.25);
+  --text-primary: #e2e8f0;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --border: #334155;
+  --border-strong: #475569;
+  --bg-page: #0f172a;
+  --bg-card: #1e293b;
+  --bg-section: #1e293b;
+  
+  /* Semantic colors - brighter for dark mode */
+  --color-success: #4ade80;
+  --color-warning: #fbbf24;
+  --color-danger: #f87171;
+  
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.25);
+  --shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.3);
+  
+  /* Button highlight colors - dark on light button */
+  --heat-color: rgba(0, 0, 0, 0.35);
+  --heat-color-soft: rgba(0, 0, 0, 0.1);
+  
+  /* Tab bar specific */
+  --tab-bar-bg: rgba(51, 65, 85, 0.8);
+  --tab-pill-bg: rgba(148, 163, 184, 0.85);
+  --tab-pill-glow: rgba(148, 163, 184, 0.35);
+  --tab-pill-text: #0f172a;
+  --tab-inactive-text: #94a3b8;
+  
+  --noise-opacity: 0.04;
+}
+
+/* ============================================
+   BASE STYLES
+   ============================================ */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg-page);
+  color: var(--text-primary);
+  min-height: 100vh;
+  transition: background var(--transition), color var(--transition);
+  position: relative;
+}
+
+/* Noise overlay */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+  opacity: var(--noise-opacity);
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.2' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  transition: opacity 0.3s ease;
+}
+
+/* ============================================
+   CONTAINER
+   ============================================ */
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  transition: background var(--transition), box-shadow var(--transition);
+  position: relative;
+  z-index: 1;
+}
+
+.container::before {
+  content: '';
+  display: block;
+  height: 3px;
+  background: var(--primary);
+  transition: background var(--transition);
+}
+
+.container-inner {
+  padding: 16px 24px 20px;
+}
+
+/* ============================================
+   HEADER
+   ============================================ */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+  transition: border-color var(--transition);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.header-icon {
+  width: 36px;
+  height: 36px;
+  background: var(--primary);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-sm);
+  transition: background var(--transition);
+  position: relative;
+}
+
+.header-icon svg {
+  width: 20px;
+  height: 20px;
+  color: white;
+}
+
+.dark .header-icon svg {
+  color: var(--bg-card);
+}
+
+/* Status indicator on header icon */
+.header-icon .status-indicator {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--bg-card);
+  background: var(--color-success);
+}
+
+.header-icon .status-indicator.disconnected {
+  background: var(--color-danger);
+}
+
+.header-icon .status-indicator.connecting {
+  background: var(--color-warning);
+}
+
+h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.3px;
+  transition: color var(--transition);
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* ============================================
+   BUTTONS - BASE
+   ============================================ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.btn svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+/* ============================================
+   PRIMARY BUTTON - Inner highlight + noise on hover
+   ============================================ */
+.btn-primary {
+  position: relative;
+  background: var(--primary);
+  color: white;
+  border: 1px solid var(--primary);
+  overflow: hidden;
+  box-shadow: none;
+  transition: 
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background var(--transition),
+    opacity var(--transition);
+}
+
+.dark .btn-primary {
+  color: var(--bg-card);
+}
+
+/* Noise texture overlay for primary button */
+.btn-primary::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  opacity: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  mix-blend-mode: overlay;
+  transition: opacity 0.2s ease;
+}
+
+.btn-primary:hover:not(:disabled) {
+  transform: scale(1.02);
+  border-color: var(--heat-color);
+  box-shadow: 
+    inset 0 0 0 1px var(--heat-color),
+    inset 0 0 8px 2px var(--heat-color-soft);
+}
+
+.btn-primary:hover:not(:disabled)::before {
+  opacity: 0.7;
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+/* ============================================
+   SECONDARY BUTTON - Border diffusion on click
+   ============================================ */
+.btn-secondary {
+  position: relative;
+  background: var(--bg-section);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  transition: background var(--transition), color var(--transition);
+  z-index: 1;
+}
+
+/* Smooth border transition when not animating */
+.btn-secondary:not(.diffuse-active) {
+  transition: background var(--transition), color var(--transition), border-color var(--transition);
+}
+
+.btn-secondary:hover {
+  background: var(--bg-card);
+  border-color: var(--primary);
+  color: var(--text-primary);
+}
+
+/* Diffuse fill layer - thickens inward from border using inset box-shadow */
+.btn-secondary::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 1;
+  box-shadow: inset 0 0 0 0 var(--primary);
+  opacity: 0;
+}
+
+/* Click animation */
+.btn-secondary.diffuse-active::after {
+  animation: borderDiffuseFill 1.5s cubic-bezier(0.25, 0.1, 0.25, 1) forwards;
+}
+
+.btn-secondary.diffuse-active {
+  animation: borderDiffuseStroke 1.5s cubic-bezier(0.25, 0.1, 0.25, 1) forwards;
+}
+
+/* Fill animation: thickens from border inward, opacity fades to 20%, then fades out */
+@keyframes borderDiffuseFill {
+  0% {
+    box-shadow: inset 0 0 0 0 var(--primary);
+    opacity: 1;
+  }
+  50% {
+    box-shadow: inset 0 0 0 60px var(--primary);
+    opacity: 0.1;
+  }
+  75% {
+    box-shadow: inset 0 0 0 60px var(--primary);
+    opacity: 0.1;
+  }
+  100% {
+    box-shadow: inset 0 0 0 60px var(--primary);
+    opacity: 0;
+  }
+}
+
+/* Border animation: fade to 20% opacity, then return to normal */
+@keyframes borderDiffuseStroke {
+  0% {
+    border-color: var(--primary);
+  }
+  50% {
+    border-color: color-mix(in srgb, var(--primary) 10%, transparent);
+  }
+  75% {
+    border-color: color-mix(in srgb, var(--primary) 10%, transparent);
+  }
+  100% {
+    border-color: var(--border);
+  }
+}
+
+/* When hovering during/after animation, return to hover state */
+.btn-secondary.diffuse-active:hover {
+  animation: borderDiffuseStrokeHover 0.7s cubic-bezier(0.25, 0.1, 0.25, 1) forwards;
+}
+
+@keyframes borderDiffuseStrokeHover {
+  0% {
+    border-color: var(--primary);
+  }
+  50% {
+    border-color: color-mix(in srgb, var(--primary) 20%, transparent);
+  }
+  100% {
+    border-color: var(--primary);
+  }
+}
+
+.btn-secondary span,
+.btn-secondary svg {
+  position: relative;
+  z-index: 2;
+}
+
+/* ============================================
+   GHOST BUTTON
+   ============================================ */
+.btn-ghost {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+}
+
+.btn-ghost:hover {
+  background: var(--bg-section);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+
+/* ============================================
+   BUTTON VARIANTS
+   ============================================ */
+.btn-small {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.btn-small svg {
+  width: 14px;
+  height: 14px;
+}
+
+.btn-icon {
+  padding: 8px;
+}
+
+.btn-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.btn-danger-text {
+  color: var(--color-danger);
+}
+
+.btn-danger-text:hover {
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+}
+
+/* ============================================
+   STAT CARDS
+   ============================================ */
+.stats-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  perspective: 800px;
+}
+
+.stat-card {
+  flex: 1;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 16px 20px;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.25s ease, border-color 0.25s ease;
+  cursor: default;
+  position: relative;
+  overflow: hidden;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+/* Tilt-based shine effect */
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    var(--shine-angle, 90deg),
+    rgba(100, 116, 139, var(--shine-opacity, 0)) 0%,
+    rgba(100, 116, 139, calc(var(--shine-opacity, 0) * 0.6)) 35%,
+    rgba(100, 116, 139, calc(var(--shine-opacity, 0) * 0.3)) 50%,
+    rgba(100, 116, 139, calc(var(--shine-opacity, 0) * 0.1)) 65%,
+    transparent 80%,
+    transparent 85%,
+    rgba(100, 116, 139, calc(var(--shine-opacity, 0) * 0.1)) 95%,
+    rgba(100, 116, 139, calc(var(--shine-opacity, 0) * 0.3)) 100%
+  );
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.dark .stat-card::before {
+  background: linear-gradient(
+    var(--shine-angle, 270deg),
+    rgba(255, 255, 255, var(--shine-opacity, 0)) 0%,
+    rgba(255, 255, 255, calc(var(--shine-opacity, 0) * 0.6)) 35%,
+    rgba(255, 255, 255, calc(var(--shine-opacity, 0) * 0.3)) 50%,
+    rgba(255, 255, 255, calc(var(--shine-opacity, 0) * 0.1)) 65%,
+    transparent 80%,
+    transparent 85%,
+    rgba(255, 255, 255, calc(var(--shine-opacity, 0) * 0.1)) 95%,
+    rgba(255, 255, 255, calc(var(--shine-opacity, 0) * 0.3)) 100%
+  );
+}
+
+.stat-card:hover {
+  box-shadow: var(--shadow-md), 0 0 20px var(--primary-glow);
+  border-color: var(--border-strong);
+}
+
+.stat-value {
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--primary);
+  line-height: 1.2;
+  transition: color var(--transition);
+  position: relative;
+  z-index: 1;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 4px;
+  position: relative;
+  z-index: 1;
+}
+
+/* Stat card color variants */
+.stat-card.success .stat-value { color: var(--color-success); }
+.stat-card.warning .stat-value { color: var(--color-warning); }
+.stat-card.danger .stat-value { color: var(--color-danger); }
+
+/* ============================================
+   TAB BAR WITH GLASS PILL
+   ============================================ */
+.tab-bar {
+  border-radius: var(--radius-pill);
+  padding: 5px;
+  display: inline-flex;
+  gap: 2px;
+  margin-bottom: 20px;
+  position: relative;
+  transition: background-color 0.3s ease, box-shadow 0.3s ease;
+  
+  /* Liquid glass container */
+  background-color: color-mix(in srgb, var(--tab-bar-bg) 60%, transparent);
+  backdrop-filter: blur(8px) saturate(150%);
+  -webkit-backdrop-filter: blur(8px) saturate(150%);
+  
+  /* Layered glass reflexes */
+  box-shadow: 
+    inset 0 0 0 1px color-mix(in srgb, white 10%, transparent),
+    inset 1.8px 3px 0px -2px color-mix(in srgb, white 60%, transparent),
+    inset -2px -2px 0px -2px color-mix(in srgb, white 50%, transparent),
+    inset -3px -8px 1px -6px color-mix(in srgb, white 35%, transparent),
+    inset -0.3px -1px 4px 0px color-mix(in srgb, black 8%, transparent),
+    inset -1.5px 2.5px 0px -2px color-mix(in srgb, black 10%, transparent),
+    inset 0px 3px 4px -2px color-mix(in srgb, black 10%, transparent),
+    inset 2px -6.5px 1px -4px color-mix(in srgb, black 6%, transparent),
+    0px 1px 5px 0px color-mix(in srgb, black 6%, transparent),
+    0px 6px 16px 0px color-mix(in srgb, black 5%, transparent);
+}
+
+.dark .tab-bar {
+  box-shadow: 
+    inset 0 0 0 1px color-mix(in srgb, white 6%, transparent),
+    inset 1.8px 3px 0px -2px color-mix(in srgb, white 20%, transparent),
+    inset -2px -2px 0px -2px color-mix(in srgb, white 15%, transparent),
+    inset -3px -8px 1px -6px color-mix(in srgb, white 10%, transparent),
+    inset -0.3px -1px 4px 0px color-mix(in srgb, black 18%, transparent),
+    inset -1.5px 2.5px 0px -2px color-mix(in srgb, black 22%, transparent),
+    inset 0px 3px 4px -2px color-mix(in srgb, black 22%, transparent),
+    inset 2px -6.5px 1px -4px color-mix(in srgb, black 12%, transparent),
+    0px 1px 5px 0px color-mix(in srgb, black 12%, transparent),
+    0px 6px 16px 0px color-mix(in srgb, black 10%, transparent);
+}
+
+.tab {
+  position: relative;
+  padding: 10px 20px;
+  border: none;
+  background: transparent;
+  color: var(--tab-inactive-text);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: var(--radius-pill);
+  transition: color var(--transition);
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tab svg {
+  width: 16px;
+  height: 16px;
+}
+
+.tab:hover:not(.active) {
+  color: var(--text-primary);
+}
+
+.tab.active {
+  color: var(--tab-pill-text);
+}
+
+/* Tab badge */
+.tab-badge {
+  background: color-mix(in srgb, var(--text-muted) 20%, transparent);
+  color: var(--text-muted);
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  transition: all var(--transition);
+}
+
+.tab.active .tab-badge {
+  background: color-mix(in srgb, var(--tab-pill-text) 25%, transparent);
+  color: var(--tab-pill-text);
+}
+
+/* The liquid glass pill indicator */
+.tab-pill {
+  position: absolute;
+  height: calc(100% - 10px);
+  top: 5px;
+  border-radius: var(--radius-pill);
+  transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 0;
+  overflow: hidden;
+  
+  background-color: color-mix(in srgb, var(--tab-pill-bg) 85%, transparent);
+  backdrop-filter: blur(8px) saturate(150%);
+  -webkit-backdrop-filter: blur(8px) saturate(150%);
+  
+  box-shadow: 
+    0px 2px 8px 0px var(--tab-pill-glow),
+    inset 0 0 0 1px color-mix(in srgb, white 12%, transparent),
+    inset 1.5px 2px 0px -1px color-mix(in srgb, white 70%, transparent),
+    inset -1.5px -1px 0px -1px color-mix(in srgb, white 50%, transparent),
+    inset -2px -5px 1px -4px color-mix(in srgb, white 40%, transparent),
+    inset -0.5px -1px 3px 0px color-mix(in srgb, black 15%, transparent),
+    inset -1px 2px 2px -1px color-mix(in srgb, black 12%, transparent),
+    inset 0px 2px 3px -1px color-mix(in srgb, black 10%, transparent),
+    inset 1.5px -4px 1px -3px color-mix(in srgb, black 8%, transparent);
+}
+
+.dark .tab-pill {
+  box-shadow: 
+    0px 2px 8px 0px var(--tab-pill-glow),
+    inset 0 0 0 1px color-mix(in srgb, white 8%, transparent),
+    inset 1.5px 2px 0px -1px color-mix(in srgb, white 25%, transparent),
+    inset -1.5px -1px 0px -1px color-mix(in srgb, white 20%, transparent),
+    inset -2px -5px 1px -4px color-mix(in srgb, white 15%, transparent),
+    inset -0.5px -1px 3px 0px color-mix(in srgb, black 25%, transparent),
+    inset -1px 2px 2px -1px color-mix(in srgb, black 20%, transparent),
+    inset 0px 2px 3px -1px color-mix(in srgb, black 18%, transparent),
+    inset 1.5px -4px 1px -3px color-mix(in srgb, black 12%, transparent);
+}
+
+/* Thin gradient line at top of pill */
+.tab-pill::before {
+  content: '';
+  position: absolute;
+  top: 1px;
+  left: 8%;
+  right: 8%;
+  height: 1px;
+  background: linear-gradient(
+    90deg, 
+    transparent 0%,
+    color-mix(in srgb, white 50%, transparent) 20%,
+    color-mix(in srgb, white 70%, transparent) 50%,
+    color-mix(in srgb, white 50%, transparent) 80%,
+    transparent 100%
+  );
+  z-index: 1;
+}
+
+.dark .tab-pill::before {
+  background: linear-gradient(
+    90deg, 
+    transparent 0%,
+    color-mix(in srgb, white 20%, transparent) 20%,
+    color-mix(in srgb, white 35%, transparent) 50%,
+    color-mix(in srgb, white 20%, transparent) 80%,
+    transparent 100%
+  );
+}
+
+/* ============================================
+   FORM INPUTS
+   ============================================ */
+input[type="text"],
+input[type="number"],
+input[type="url"],
+select,
+textarea {
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text-primary);
+  outline: none;
+  transition: all var(--transition);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-muted);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--primary);
+}
+
+select {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 40px;
+}
+
+.dark select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+}
+
+/* ============================================
+   GLOBAL SEARCH
+   ============================================ */
+.global-search {
+  position: relative;
+  margin-bottom: 20px;
+}
+
+.global-search-input {
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text-primary);
+  outline: none;
+  transition: all var(--transition);
+}
+
+.global-search-input::placeholder {
+  color: var(--text-muted);
+}
+
+.global-search-input:focus {
+  border-color: var(--primary);
+}
+
+/* ============================================
+   DROPDOWN MENU
+   ============================================ */
+.dropdown-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  min-width: 180px;
+  padding: 6px;
+  z-index: 1000;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-8px);
+  transition: all 0.2s ease;
+}
+
+.dropdown-wrapper:hover .dropdown-menu,
+.dropdown-menu.show {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition);
+  text-align: left;
+}
+
+.dropdown-item:hover {
+  background: var(--primary-light);
+  color: var(--text-primary);
+}
+
+.dropdown-item svg {
+  width: 16px;
+  height: 16px;
+  opacity: 0.7;
+}
+
+.dropdown-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 6px 0;
+}
+
+/* ============================================
+   TOAST NOTIFICATIONS
+   ============================================ */
+.toast-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.toast {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px 18px;
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 320px;
+  max-width: 420px;
+  animation: toastIn 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes toastOut {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+}
+
+.toast-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  color: var(--color-success);
+}
+
+.toast.error .toast-icon {
+  color: var(--color-danger);
+}
+
+.toast.warning .toast-icon {
+  color: var(--color-warning);
+}
+
+.toast-content {
+  flex: 1;
+}
+
+.toast-title {
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 2px;
+}
+
+.toast-message {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.toast-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: var(--primary);
+  animation: toastProgress 4s linear forwards;
+}
+
+@keyframes toastProgress {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+
+/* ============================================
+   SECTION STYLING
+   ============================================ */
+.section {
+  margin-bottom: 14px;
+}
+
+.section-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-bottom: 8px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: color var(--transition);
+}
+
+.section-title::before {
+  content: '';
+  width: 2px;
+  height: 12px;
+  background: var(--primary);
+  border-radius: 1px;
+  transition: background var(--transition);
+}
+
+.section-title svg {
+  width: 14px;
+  height: 14px;
+}
+
+.section-title .count {
+  background: var(--primary-light);
+  color: var(--primary);
+  padding: 2px 7px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  transition: background var(--transition), color var(--transition);
+}
+
+/* ============================================
+   TAG PILLS
+   ============================================ */
+.tag-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  color: white;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  transition: transform 0.1s ease;
+  cursor: default;
+}
+
+.tag-pill:hover {
+  transform: translateY(-1px);
+}
+
+.tag-artist { background: var(--tag-artist); }
+.tag-character { background: var(--tag-character); }
+.tag-copyright { background: var(--tag-copyright); }
+.tag-general { background: var(--tag-general); }
+.tag-meta { background: var(--tag-meta); }
+
+/* ============================================
+   MODAL
+   ============================================ */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  opacity: 1;
+  transition: opacity 0.2s ease;
+}
+
+.modal-overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.modal {
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 24px;
+  min-width: 400px;
+  max-width: 90vw;
+  transform: scale(1);
+  transition: transform 0.2s ease;
+}
+
+.modal-overlay.hidden .modal {
+  transform: scale(0.95);
+}
+
+.modal h3 {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
+.modal-field {
+  margin-bottom: 16px;
+}
+
+.modal-field label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+/* ============================================
+   EMPTY STATE
+   ============================================ */
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-muted);
+}
+
+.empty-state-icon {
+  margin-bottom: 12px;
+}
+
+.empty-state-icon svg {
+  width: 48px;
+  height: 48px;
+  opacity: 0.5;
+}
+
+.empty-state-text {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* ============================================
+   UTILITY CLASSES
+   ============================================ */
+.hidden {
+  display: none !important;
+}
+
+.text-success { color: var(--color-success); }
+.text-warning { color: var(--color-warning); }
+.text-danger { color: var(--color-danger); }
+.text-muted { color: var(--text-muted); }
+
+/* ============================================
+   SCROLLBAR STYLING
+   ============================================ */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-section);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* ============================================
+   SPINNER
+   ============================================ */
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--primary-light);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

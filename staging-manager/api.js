@@ -317,7 +317,8 @@ async function loadImages(reset = false) {
     document.getElementById('load-more-trigger').style.display = 'flex';
 
     try {
-      const result = await apiCall(`/api/staging/images?limit=50&offset=${imagesOffset}`);
+      // Add the sort parameter to the API call
+      const result = await apiCall(`/api/staging/images?limit=50&offset=${imagesOffset}&sort=${currentSort}`);
       stagingImages = stagingImages.concat(result.images || []);
       imagesHasMore = result.hasMore ?? false;
       imagesOffset += (result.images || []).length;

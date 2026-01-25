@@ -154,76 +154,6 @@
       transition: color var(--transition);
     }
 
-    /* Theme Toggle */
-    .theme-toggle {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .theme-toggle-label {
-      font-size: 11px;
-      font-weight: 500;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    .toggle-switch {
-      position: relative;
-      width: 44px;
-      height: 24px;
-      cursor: pointer;
-    }
-
-    .toggle-switch input {
-      opacity: 0;
-      width: 0;
-      height: 0;
-    }
-
-    .toggle-rail {
-      position: absolute;
-      top: 50%;
-      left: 0;
-      right: 0;
-      height: 14px;
-      transform: translateY(-50%);
-      background: var(--border-strong);
-      border-radius: 7px;
-      transition: background var(--transition);
-    }
-
-    .toggle-knob {
-      position: absolute;
-      top: 50%;
-      left: 2px;
-      width: 20px;
-      height: 20px;
-      transform: translateY(-50%);
-      background: var(--text-primary);
-      border-radius: 50%;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-      transition: left 0.2s cubic-bezier(0.4, 0, 0.2, 1), background var(--transition);
-    }
-
-    .toggle-switch input:checked ~ .toggle-rail {
-      background: var(--primary);
-    }
-
-    .toggle-switch input:checked ~ .toggle-knob {
-      left: 22px;
-      background: var(--bg-card);
-    }
-
-    .dark .toggle-knob {
-      background: var(--text-primary);
-    }
-
-    .dark .toggle-switch input:checked ~ .toggle-knob {
-      background: var(--text-primary);
-    }
-
     /* Option Groups */
     .option-group {
       margin-bottom: 20px;
@@ -588,14 +518,6 @@
           </div>
           <h1>Settings</h1>
         </div>
-        <div class="theme-toggle">
-          <span class="theme-toggle-label">Theme</span>
-          <label class="toggle-switch">
-            <input type="checkbox" id="theme-checkbox">
-            <span class="toggle-rail"></span>
-            <span class="toggle-knob"></span>
-          </label>
-        </div>
       </div>
       
       <div class="option-group">
@@ -646,6 +568,15 @@
             Show notification toasts
           </label>
         </div>
+        <div class="section-title">Appearance</div>
+        <div class="option-row">
+          <label for="theme">Theme</label>
+          <select id="theme">
+            <option value="system">System Default</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </div>
       </div>
       
       <div class="option-group">
@@ -690,63 +621,7 @@
       </div>
     </div>
   </div>
-  
+  <script src="theme.js"></script>
   <script src="options.js"></script>
-  <script>
-    // Theme toggle functionality
-    const themeCheckbox = document.getElementById('theme-checkbox');
-    
-    function applyTheme(theme) {
-      if (theme === 'dark') {
-        document.documentElement.classList.add('dark');
-        themeCheckbox.checked = true;
-      } else {
-        document.documentElement.classList.remove('dark');
-        themeCheckbox.checked = false;
-      }
-    }
-
-    // Load saved theme
-    browser.storage.sync.get(['theme']).then((result) => {
-      if (result.theme) {
-        applyTheme(result.theme);
-      } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        applyTheme('dark');
-      } else {
-        applyTheme('light');
-      }
-    }).catch(() => {
-      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        applyTheme('dark');
-      }
-    });
-
-    // Save theme on toggle
-    themeCheckbox.addEventListener('change', () => {
-      const theme = themeCheckbox.checked ? 'dark' : 'light';
-      applyTheme(theme);
-      browser.storage.sync.set({ theme }).catch(console.error);
-    });
-
-    // Add diffuse effect to save button
-    document.querySelectorAll('.btn').forEach(btn => {
-      btn.addEventListener('click', function(e) {
-        this.classList.remove('diffuse-active');
-        void this.offsetWidth;
-        this.classList.add('diffuse-active');
-      });
-
-      btn.addEventListener('animationend', function() {
-        this.classList.remove('diffuse-active');
-      });
-    });
-
-    // Slider value display
-    const slider = document.getElementById('similarityThreshold');
-    const thresholdValue = document.getElementById('thresholdValue');
-    slider.addEventListener('input', () => {
-      thresholdValue.textContent = slider.value;
-    });
-  </script>
 </body>
 </html>

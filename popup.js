@@ -68,6 +68,13 @@ document.getElementById('save-current').addEventListener('click', function() {
     fileInput.click();
   });
   
+  document.getElementById('staging-manager').addEventListener('click', function() {
+    browser.tabs.create({
+      url: browser.runtime.getURL('staging-manager/index.html')
+    });
+    window.close();
+  });
+
   document.getElementById('options').addEventListener('click', function() {
     browser.runtime.openOptionsPage();
     window.close();

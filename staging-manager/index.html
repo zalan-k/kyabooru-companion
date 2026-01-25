@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kyabooru Staging Manager</title>
+  <link rel="stylesheet" href="../shared.css">
+  <script src="../theme.js"></script>
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-left">
+        <div class="dropdown-wrapper">
+          <div class="header-icon">
+            <!-- Lucide package-search icon -->
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 10V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l2-1.14"/>
+              <path d="m7.5 4.27 9 5.15"/>
+              <polyline points="3.29 7 12 12 20.71 7"/>
+              <line x1="12" y1="22" x2="12" y2="12"/>
+              <circle cx="18.5" cy="15.5" r="2.5"/>
+              <path d="M20.27 17.27 22 19"/>
+            </svg>
+            <span id="status-indicator" class="status-indicator"></span>
+          </div>
+          <div class="dropdown-menu">
+            <button class="dropdown-item" onclick="runAnalyzer()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 7V5a2 2 0 0 1 2-2h2"/>
+                <path d="M17 3h2a2 2 0 0 1 2 2v2"/>
+                <path d="M21 17v2a2 2 0 0 1-2 2h-2"/>
+                <path d="M7 21H5a2 2 0 0 1-2-2v-2"/>
+                <circle cx="12" cy="12" r="3"/>
+                <path d="m16 16-1.9-1.9"/>
+              </svg>
+              Analyze Tags
+            </button>
+            <div class="dropdown-divider"></div>
+            <div class="dropdown-submenu">
+              <button class="dropdown-item has-submenu">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                Import
+                <svg class="submenu-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="9 18 15 12 9 6"/>
+                </svg>
+              </button>
+              <div class="dropdown-submenu-content">
+                <button class="dropdown-item" onclick="importFullConfig()">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                  </svg>
+                  Full Config
+                </button>
+                <div class="dropdown-divider"></div>
+                <button class="dropdown-item" onclick="importHierarchyOnly()">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="6" y1="3" x2="6" y2="15"/>
+                    <circle cx="18" cy="6" r="3"/>
+                    <circle cx="6" cy="18" r="3"/>
+                    <path d="M18 9a9 9 0 0 1-9 9"/>
+                  </svg>
+                  Hierarchy Only
+                </button>
+                <button class="dropdown-item" onclick="importAliasesOnly()">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                  </svg>
+                  Aliases Only
+                </button>
+                <button class="dropdown-item" onclick="importExclusionsOnly()">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+                  </svg>
+                  Exclusions Only
+                </button>
+              </div>
+            </div>
+            <button class="dropdown-item" onclick="exportConfig()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/>
+                <line x1="12" y1="3" x2="12" y2="15"/>
+              </svg>
+              Export
+            </button>
+            <div class="dropdown-divider"></div>
+            <button class="dropdown-item" onclick="location.reload()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 2v6h-6"/>
+                <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
+                <path d="M3 22v-6h6"/>
+                <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
+              </svg>
+              Refresh
+            </button>
+          </div>
+        </div>
+        <h1>Staging Manager</h1>
+        <!-- Expanding search button -->
+        <div class="header-search-expand" id="header-search-expand">
+          <button class="btn btn-secondary btn-icon" id="expand-search-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="-2 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-search-code-icon lucide-search-code"><path d="m13 13.5 2-2.5-2-2.5"/><path d="m21 21-4.3-4.3"/><path d="M9 8.5 7 11l2 2.5"/><circle cx="11" cy="11" r="8"/></svg>
+          </button>
+          <input type="text" class="global-search-input" id="global-search" 
+                placeholder="Search tags across all images...">
+          <div class="autocomplete-dropdown" id="global-search-dropdown"></div>
+        </div>
+        <!-- Stats Row -->
+        <div class="stats-row">
+          <div class="stat-card">
+            <div class="stat-value" id="stat-images">0</div>
+            <div class="stat-label">Staged Images</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="stat-tags">0</div>
+            <div class="stat-label">Unique Tags</div>
+          </div>
+          <div class="stat-card warning">
+            <div class="stat-value" id="stat-suggestions">0</div>
+            <div class="stat-label">Suggestions</div>
+          </div>
+          <div class="stat-card success">
+            <div class="stat-value" id="stat-aliases">0</div>
+            <div class="stat-label">Aliases</div>
+          </div>
+          <div class="stat-card danger">
+            <div class="stat-value" id="stat-blacklist">0</div>
+            <div class="stat-label">Blacklisted</div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Tab Bar -->
+    <div class="tab-bar" id="tab-bar">
+      <div class="tab-pill" id="tab-pill"></div>
+      <button class="tab active" data-tab="images">
+        <!-- Lucide image icon -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+          <circle cx="8.5" cy="8.5" r="1.5"/>
+          <polyline points="21 15 16 10 5 21"/>
+        </svg>
+        <span>Images</span>
+        <span class="tab-badge" id="tab-images-count">0</span>
+      </button>
+      <button class="tab" data-tab="aliases">
+        <!-- Lucide link icon -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+        </svg>
+        <span>Aliases</span>
+        <span class="tab-badge" id="tab-aliases-count">0</span>
+      </button>
+      <button class="tab" data-tab="exclusions">
+        <!-- Lucide ban icon -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+        </svg>
+        <span>Exclusions</span>
+        <span class="tab-badge" id="tab-exclusions-count">0</span>
+      </button>
+      <button class="tab" data-tab="hierarchy">
+        <!-- Lucide git-branch icon -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="6" y1="3" x2="6" y2="15"/>
+          <circle cx="18" cy="6" r="3"/>
+          <circle cx="6" cy="18" r="3"/>
+          <path d="M18 9a9 9 0 0 1-9 9"/>
+        </svg>
+        <span>Hierarchy</span>
+        <span class="tab-badge" id="tab-hierarchy-count">0</span>
+      </button>
+    </div>
+
+    <!-- Main Content -->
+    <main class="app-main">
+      <!-- ==================== IMAGES TAB ==================== -->
+      <div class="tab-content active" id="tab-images">
+        <div class="images-container">
+          <div class="images-grid-wrapper" id="images-scroll-container">
+            <!-- Images toolbar - under tab bar, only visible in Images tab -->
+            <div class="images-toolbar">
+              <div class="toolbar-glass">
+                <input type="text" id="images-filter" placeholder="Filter images by tag...">
+              </div>
+              <div class="toolbar-glass dropdown-wrapper" id="sort-container">
+                <button class="btn btn-small btn-secondary" id="sort-toggle">
+                  <!-- Sort icon -->
+                  <svg id="sort-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 6h18"/>
+                    <path d="M7 12h10"/>
+                    <path d="M10 18h4"/>
+                  </svg>
+                </button>
+                <div class="dropdown-menu" id="sort-dropdown">
+                  <button class="dropdown-item" data-value="newest">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-calendar-arrow-down-icon lucide-calendar-arrow-down"><path d="m14 18 4 4 4-4"/><path d="M16 2v4"/><path d="M18 14v8"/><path d="M21 11.354V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7.343"/><path d="M3 10h18"/><path d="M8 2v4"/></svg>
+                    Newest First
+                  </button>
+                  <button class="dropdown-item" data-value="oldest">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-calendar-arrow-up-icon lucide-calendar-arrow-up"><path d="m14 18 4-4 4 4"/><path d="M16 2v4"/><path d="M18 22v-8"/><path d="M21 11.343V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h9"/><path d="M3 10h18"/><path d="M8 2v4"/></svg>
+                    Oldest First
+                  </button>
+                  <button class="dropdown-item" data-value="tags-desc">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-down-wide-narrow-icon lucide-arrow-down-wide-narrow"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="M11 4h10"/><path d="M11 8h7"/><path d="M11 12h4"/></svg>
+                    Most Tags
+                  </button>
+                  <button class="dropdown-item" data-value="tags-asc">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-narrow-wide-icon lucide-arrow-up-narrow-wide"><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/><path d="M11 12h4"/><path d="M11 16h7"/><path d="M11 20h10"/></svg>
+                    Least Tags
+                  </button>
+                </div>
+              </div>
+              <div class="toolbar-glass" onclick="loadImages(true)">
+                <button class="btn btn-small btn-secondary" >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 2v6h-6"/>
+                    <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
+                    <path d="M3 22v-6h6"/>
+                    <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div class="images-grid" id="images-grid"></div>
+            <div class="load-more-trigger" id="load-more-trigger">
+              <div class="spinner"></div>
+              <span>Loading more...</span>
+            </div>
+          </div>
+
+          <!-- Image Sidebar -->
+          <aside class="image-sidebar hidden" id="image-sidebar">
+            <div class="sidebar-header">
+              <h3>Edit Image</h3>
+              <button class="btn btn-icon btn-ghost" onclick="closeSidebar()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/>
+                  <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+            <div class="sidebar-preview">
+              <img id="sidebar-image" src="" alt="Preview">
+            </div>
+            <div class="sidebar-content">
+              <div class="sidebar-field">
+                <label>Source URL</label>
+                <input type="text" id="sidebar-source-url" placeholder="https://...">
+              </div>
+              <div class="sidebar-field">
+                <label>Pool</label>
+                <div class="pool-row">
+                  <input type="text" id="sidebar-pool-id" placeholder="Pool ID">
+                  <input type="number" id="sidebar-pool-index" placeholder="#" min="0">
+                  <button class="btn btn-small btn-ghost" onclick="generatePoolId()">New</button>
+                </div>
+              </div>
+              <div class="sidebar-field">
+                <label>Hash (pHash)</label>
+                <input type="text" id="sidebar-phash" disabled>
+              </div>                            
+              <div class="sidebar-field">
+                <label>Tags</label>
+                <div class="sidebar-tags" id="sidebar-tags"></div>
+                <div class="autocomplete-wrapper">
+                  <input type="text" id="sidebar-tag-input" placeholder="Add tag...">
+                  <div class="autocomplete-dropdown" id="sidebar-tag-dropdown"></div>
+                </div>
+              </div>
+            </div>
+            <div class="sidebar-actions">
+              <button class="btn btn-primary" onclick="saveCurrentImage()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                  <polyline points="17 21 17 13 7 13 7 21"/>
+                  <polyline points="7 3 7 8 15 8"/>
+                </svg>
+                <span>Save</span>
+              </button>
+              <button class="btn btn-secondary btn-danger-text" onclick="deleteCurrentImage()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="3 6 5 6 21 6"/>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                  <line x1="10" y1="11" x2="10" y2="17"/>
+                  <line x1="14" y1="11" x2="14" y2="17"/>
+                </svg>
+                <span>Delete</span>
+              </button>
+            </div>
+          </aside>
+        </div>
+      </div>
+
+      <!-- ==================== ALIASES TAB ==================== -->
+      <div class="tab-content" id="tab-aliases">
+        <div class="aliases-container">
+          <div class="panel-toolbar">
+            <div class="autocomplete-wrapper panel-toolbar-input">
+              <input type="text" id="add-alias-input" placeholder="Add alias (e.g. character:ouro_kronii)...">
+              <div class="autocomplete-dropdown" id="add-alias-dropdown"></div>
+            </div>
+            <input type="text" id="aliases-filter" class="toolbar-filter-right" placeholder="Filter aliases by tag..." oninput="filterAliases()">
+          </div>
+
+          <!-- Suggestions -->
+          <div class="suggestions-section" id="alias-suggestions-section">
+            <div class="section-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+              </svg>
+              Analyzer Suggestions
+            </div>
+            <div id="alias-suggestions"></div>
+          </div>
+
+          <!-- User Aliases -->
+          <div id="aliases-list"></div>
+
+          <div class="empty-state" id="aliases-empty">
+            <div class="empty-state-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+              </svg>
+            </div>
+            <div class="empty-state-text">No aliases defined yet.<br>Add one to consolidate variant tags.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== EXCLUSIONS TAB ==================== -->
+      <div class="tab-content" id="tab-exclusions">
+        <div class="exclusions-container">
+          <!-- Blacklist Panel -->
+          <div class="exclusion-panel blacklist">
+            <div class="section-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+              </svg>
+              Blacklist
+            </div>
+            <div class="exclusion-filter">
+              <input type="text" id="blacklist-filter" placeholder="Filter blacklist..." oninput="filterBlacklist()">
+            </div>
+            <div class="exclusion-items" id="blacklist-items"></div>
+            <div class="add-exclusion-row">
+              <div class="autocomplete-wrapper add-exclusion-input">
+                <input type="text" id="add-blacklist-input" placeholder="Add tag to blacklist (press Enter)...">
+                <div class="autocomplete-dropdown" id="blacklist-dropdown"></div>
+              </div>
+            </div>
+            <!-- Garbage Suggestions -->
+            <div class="suggestions-section" id="garbage-suggestions-section">
+              <div class="section-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                </svg>
+                Garbage Suggestions
+              </div>
+              <div id="garbage-suggestions"></div>
+            </div>
+          </div>
+
+          <!-- Whitelist Panel -->
+          <div class="exclusion-panel whitelist">
+            <div class="section-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                <polyline points="22 4 12 14.01 9 11.01"/>
+              </svg>
+              Whitelist
+            </div>
+            <div class="exclusion-filter">
+              <input type="text" id="whitelist-filter" placeholder="Filter whitelist..." oninput="filterWhitelist()">
+            </div>
+            <div class="exclusion-items" id="whitelist-items"></div>
+            <div class="add-exclusion-row">
+              <div class="autocomplete-wrapper add-exclusion-input">
+                <input type="text" id="add-whitelist-input" placeholder="Add tag to whitelist (press Enter)...">
+                <div class="autocomplete-dropdown" id="whitelist-dropdown"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== HIERARCHY TAB ==================== -->
+      <div class="tab-content" id="tab-hierarchy">
+        <div class="hierarchy-container">
+          <div class="hierarchy-toolbar">
+            <div class="autocomplete-wrapper hierarchy-add-input">
+              <input type="text" id="new-hierarchy-tag" placeholder="Add root tag (e.g. character:ouro_kronii)...">
+              <div class="autocomplete-dropdown" id="hierarchy-tag-dropdown"></div>
+            </div>
+            <button class="btn btn-small btn-ghost" onclick="expandAllHierarchy()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="15 3 21 3 21 9"/>
+                <polyline points="9 21 3 21 3 15"/>
+                <line x1="21" y1="3" x2="14" y2="10"/>
+                <line x1="3" y1="21" x2="10" y2="14"/>
+              </svg>
+              <span>Expand All</span>
+            </button>
+            <button class="btn btn-small btn-ghost" onclick="collapseAllHierarchy()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="4 14 10 14 10 20"/>
+                <polyline points="20 10 14 10 14 4"/>
+                <line x1="14" y1="10" x2="21" y2="3"/>
+                <line x1="3" y1="21" x2="10" y2="14"/>
+              </svg>
+              <span>Collapse All</span>
+            </button>
+            <div class="toolbar-spacer"></div>
+            <input type="text" id="hierarchy-filter" class="toolbar-filter-right" placeholder="Filter hierarchy by tag..." oninput="filterHierarchy()">
+          </div>
+          <div class="hierarchy-tree-wrapper">
+            <div class="hierarchy-tree" id="hierarchy-tree"></div>
+            <div class="hierarchy-empty" id="hierarchy-empty">
+              No hierarchy defined. Add a root tag to get started.
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- Hierarchy Node Modal -->
+  <div class="modal-overlay hidden" id="hierarchy-modal">
+    <div class="modal">
+      <h3 id="hierarchy-modal-title">Add Child Tag</h3>
+      <div class="modal-field">
+        <label>Tag (e.g. character:ouro_kronii)</label>
+        <div class="autocomplete-wrapper">
+          <input type="text" id="hierarchy-modal-tag" placeholder="category:tag_name or just tag_name...">
+          <div class="autocomplete-dropdown" id="hierarchy-modal-dropdown"></div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="closeModal('hierarchy-modal')">Cancel</button>
+        <button class="btn btn-primary" id="hierarchy-modal-submit">Add</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="api.js"></script>
+  <script src="ui.js"></script>
+</body>
+</html>
