@@ -195,34 +195,34 @@
               <div class="toolbar-glass">
                 <input type="text" id="images-filter" placeholder="Filter images by tag...">
               </div>
-              <div class="toolbar-glass dropdown-wrapper" id="sort-container">
-                <button class="btn btn-small btn-secondary" id="sort-toggle">
-                  <!-- Sort icon -->
-                  <svg id="sort-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M3 6h18"/>
-                    <path d="M7 12h10"/>
-                    <path d="M10 18h4"/>
-                  </svg>
-                </button>
-                <div class="dropdown-menu" id="sort-dropdown">
+                <div class="toolbar-glass" id="sort-container">
+                  <button class="btn btn-small btn-secondary" id="sort-toggle">
+                    <!-- Sort icon -->
+                    <svg id="sort-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M3 6h18"/>
+                      <path d="M7 12h10"/>
+                      <path d="M10 18h4"/>
+                    </svg>
+                  </button>
+                </div>
+                <div class="sort-dropdown-floating" id="sort-dropdown">
                   <button class="dropdown-item" data-value="newest">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-calendar-arrow-down-icon lucide-calendar-arrow-down"><path d="m14 18 4 4 4-4"/><path d="M16 2v4"/><path d="M18 14v8"/><path d="M21 11.354V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7.343"/><path d="M3 10h18"/><path d="M8 2v4"/></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m14 18 4 4 4-4"/><path d="M16 2v4"/><path d="M18 14v8"/><path d="M21 11.354V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7.343"/><path d="M3 10h18"/><path d="M8 2v4"/></svg>
                     Newest First
                   </button>
                   <button class="dropdown-item" data-value="oldest">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-calendar-arrow-up-icon lucide-calendar-arrow-up"><path d="m14 18 4-4 4 4"/><path d="M16 2v4"/><path d="M18 22v-8"/><path d="M21 11.343V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h9"/><path d="M3 10h18"/><path d="M8 2v4"/></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m14 18 4-4 4 4"/><path d="M16 2v4"/><path d="M18 22v-8"/><path d="M21 11.343V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h9"/><path d="M3 10h18"/><path d="M8 2v4"/></svg>
                     Oldest First
                   </button>
                   <button class="dropdown-item" data-value="tags-desc">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-down-wide-narrow-icon lucide-arrow-down-wide-narrow"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="M11 4h10"/><path d="M11 8h7"/><path d="M11 12h4"/></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="M11 4h10"/><path d="M11 8h7"/><path d="M11 12h4"/></svg>
                     Most Tags
                   </button>
                   <button class="dropdown-item" data-value="tags-asc">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-narrow-wide-icon lucide-arrow-up-narrow-wide"><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/><path d="M11 12h4"/><path d="M11 16h7"/><path d="M11 20h10"/></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/><path d="M11 12h4"/><path d="M11 16h7"/><path d="M11 20h10"/></svg>
                     Least Tags
                   </button>
                 </div>
-              </div>
               <div class="toolbar-glass" onclick="loadImages(true)">
                 <button class="btn btn-small btn-secondary" >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -307,12 +307,14 @@
       <!-- ==================== ALIASES TAB ==================== -->
       <div class="tab-content" id="tab-aliases">
         <div class="aliases-container">
-          <div class="panel-toolbar">
-            <div class="autocomplete-wrapper panel-toolbar-input">
+          <div class="images-toolbar">
+            <div class="toolbar-glass">
+              <input type="text" id="aliases-filter" placeholder="Filter aliases by tag..." oninput="filterAliases()">
+            </div>
+            <div class="toolbar-glass autocomplete-wrapper">
               <input type="text" id="add-alias-input" placeholder="Add alias (e.g. character:ouro_kronii)...">
               <div class="autocomplete-dropdown" id="add-alias-dropdown"></div>
             </div>
-            <input type="text" id="aliases-filter" class="toolbar-filter-right" placeholder="Filter aliases by tag..." oninput="filterAliases()">
           </div>
 
           <!-- Suggestions -->
@@ -401,31 +403,34 @@
       <!-- ==================== HIERARCHY TAB ==================== -->
       <div class="tab-content" id="tab-hierarchy">
         <div class="hierarchy-container">
-          <div class="hierarchy-toolbar">
-            <div class="autocomplete-wrapper hierarchy-add-input">
+          <div class="images-toolbar">
+            <div class="toolbar-glass">
+              <input type="text" id="hierarchy-filter" placeholder="Filter hierarchy by tag..." oninput="filterHierarchy()">
+            </div>
+            <div class="toolbar-glass autocomplete-wrapper">
               <input type="text" id="new-hierarchy-tag" placeholder="Add root tag (e.g. character:ouro_kronii)...">
               <div class="autocomplete-dropdown" id="hierarchy-tag-dropdown"></div>
             </div>
-            <button class="btn btn-small btn-ghost" onclick="expandAllHierarchy()">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="15 3 21 3 21 9"/>
-                <polyline points="9 21 3 21 3 15"/>
-                <line x1="21" y1="3" x2="14" y2="10"/>
-                <line x1="3" y1="21" x2="10" y2="14"/>
-              </svg>
-              <span>Expand All</span>
-            </button>
-            <button class="btn btn-small btn-ghost" onclick="collapseAllHierarchy()">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="4 14 10 14 10 20"/>
-                <polyline points="20 10 14 10 14 4"/>
-                <line x1="14" y1="10" x2="21" y2="3"/>
-                <line x1="3" y1="21" x2="10" y2="14"/>
-              </svg>
-              <span>Collapse All</span>
-            </button>
-            <div class="toolbar-spacer"></div>
-            <input type="text" id="hierarchy-filter" class="toolbar-filter-right" placeholder="Filter hierarchy by tag..." oninput="filterHierarchy()">
+            <div class="toolbar-glass" onclick="expandAllHierarchy()">
+              <button class="btn btn-small btn-secondary">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="15 3 21 3 21 9"/>
+                  <polyline points="9 21 3 21 3 15"/>
+                  <line x1="21" y1="3" x2="14" y2="10"/>
+                  <line x1="3" y1="21" x2="10" y2="14"/>
+                </svg>
+              </button>
+            </div>
+            <div class="toolbar-glass" onclick="collapseAllHierarchy()">
+              <button class="btn btn-small btn-secondary">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="4 14 10 14 10 20"/>
+                  <polyline points="20 10 14 10 14 4"/>
+                  <line x1="14" y1="10" x2="21" y2="3"/>
+                  <line x1="3" y1="21" x2="10" y2="14"/>
+                </svg>
+              </button>
+            </div>
           </div>
           <div class="hierarchy-tree-wrapper">
             <div class="hierarchy-tree" id="hierarchy-tree"></div>

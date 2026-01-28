@@ -244,25 +244,57 @@
     // Initialize with correct icon
     updateSortIcon(currentSort);
 
-    // Use existing dropdown pattern - dropdown appears on hover
-    sortContainer.addEventListener('mouseenter', () => {
+    // Position and show dropdown
+    function showSortDropdown() {
+      const rect = sortContainer.getBoundingClientRect();
+      sortDropdown.style.top = (rect.bottom + 6) + 'px';
+      sortDropdown.style.left = rect.left + 'px';
       sortDropdown.classList.add('show');
+    }
+
+    // Hide dropdown
+    function hideSortDropdown() {
+      sortDropdown.classList.remove('show');
+    }
+
+    // Click to toggle dropdown
+    sortContainer.addEventListener('mouseenter', () => {
+      showSortDropdown();
     });
 
+    // Hide when leaving button (with delay to allow moving to dropdown)
     sortContainer.addEventListener('mouseleave', () => {
-      // Small delay to allow moving to dropdown
       setTimeout(() => {
         if (!sortContainer.matches(':hover') && !sortDropdown.matches(':hover')) {
-          sortDropdown.classList.remove('show');
+          hideSortDropdown();
         }
       }, 100);
     });
 
-    // Also close when clicking outside
+    // Keep open when hovering dropdown
+    sortDropdown.addEventListener('mouseenter', () => {
+      sortDropdown.classList.add('show');
+    });
+
+    // Hide when leaving dropdown (with delay to allow moving back to button)
+    sortDropdown.addEventListener('mouseleave', () => {
+      setTimeout(() => {
+        if (!sortContainer.matches(':hover') && !sortDropdown.matches(':hover')) {
+          hideSortDropdown();
+        }
+      }, 100);
+    });
+
+    // Also close when clicking outside (fallback)
     document.addEventListener('click', (e) => {
-      if (!sortContainer.contains(e.target)) {
-        sortDropdown.classList.remove('show');
+      if (!sortContainer.contains(e.target) && !sortDropdown.contains(e.target)) {
+        hideSortDropdown();
       }
+    });
+
+    // Close on scroll (since it's fixed position)
+    document.getElementById('images-scroll-container').addEventListener('scroll', () => {
+      hideSortDropdown();
     });
 
     // Set up sort dropdown click handlers
@@ -277,7 +309,7 @@
         updateSortIcon(value);
         
         // Close dropdown
-        sortDropdown.classList.remove('show');
+        hideSortDropdown();
         
         // Trigger image reload with new sort
         imagesOffset = 0;
@@ -302,21 +334,6 @@
           break;
       }
     }
-
-    // Close dropdown when clicking elsewhere
-    document.addEventListener('click', (e) => {
-      if (!e.target.closest('#sort-container')) {
-        sortDropdown.style.display = 'none';
-      }
-    });
-
-    // Toggle dropdown on button click (optional alternative to hover)
-    sortToggle.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const isVisible = sortDropdown.style.display === 'block';
-      sortDropdown.style.display = isVisible ? 'none' : 'block';
-    });
 
   });
 

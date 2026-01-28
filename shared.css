@@ -1389,8 +1389,30 @@ body:has(.app-container) {
 
 /* Tab bar in fixed header */
 .app-container > .tab-bar {
-  margin: 0px 20px 10px;
+  margin: 0px 26px 0px 16px;
   flex-shrink: 0;
+  z-index: 11;
+}
+
+/* Frosted gradient fade below tab bar */
+.app-container > .tab-bar::after {
+  content: '';
+  position: absolute;
+  left: -20px;
+  right: -20px;
+  bottom: 0;
+  height: 20px;
+  transform: translateY(100%);
+  pointer-events: none;
+  z-index: 10;
+  
+  /* Frosted glass effect */
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  
+  /* Gradient mask: solid at top, transparent at bottom */
+  -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%);
+  mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%);
 }
 
 /* Main content area - scrollable */
@@ -1399,6 +1421,7 @@ body:has(.app-container) {
   overflow: hidden;
   display: flex;
   padding: 0px 20px 20px 20px;
+  margin-top: -10px;
 }
 
 /* Tab content */
@@ -1410,6 +1433,38 @@ body:has(.app-container) {
 
 .tab-content.active {
   display: flex;
+}
+
+/* Reusable toolbar styling for all tabs */
+.hierarchy-container .images-toolbar,
+.exclusions-container .images-toolbar {
+  margin-bottom: 16px;
+  margin-left: 4;
+  position: sticky;
+  top: 5px;
+  padding: 10px 0;
+  background: transparent; /* color-mix(in srgb, var(--bg-page) 80%, transparent); */
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 10;
+}
+
+.dark .aliases-container .images-toolbar,
+.dark .hierarchy-container .images-toolbar,
+.dark .exclusions-container .images-toolbar {
+  background: transparent;
+}
+
+.toolbar-glass.autocomplete-wrapper {
+  position: relative;
+}
+
+.toolbar-glass .autocomplete-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
 }
 
 /* ============================================
@@ -1450,7 +1505,8 @@ body:has(.app-container) {
   border: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
   border-radius: var(--radius-md);
   padding: 6px 10px;
-  margin-top: -10px;
+  margin-top: 5px;
+  margin-left: -3px;
   box-shadow: 
     0 2px 8px rgba(0, 0, 0, 0.04),
     inset 0 1px 0 color-mix(in srgb, white 10%, transparent);
@@ -1481,70 +1537,78 @@ body:has(.app-container) {
 /* Filter input width */
 .toolbar-glass input[type="text"] {
   width: 200px;
+  color: var(--text-primary);
 }
 
-/* Sort container hover effect - REPLACE the existing #sort-container styles */
-.dropdown-wrapper#sort-container {
-  position: relative;
-  cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+.toolbar-glass input::placeholder {
+  color: var(--text-secondary);
+  opacity: 1;
 }
 
-.dropdown-wrapper#sort-container:hover {
-  transform: scale(1.02);
-  background: color-mix(in srgb, var(--bg-card) 80%, transparent);
-  box-shadow: 
-    0 4px 12px rgba(0, 0, 0, 0.06),
-    inset 0 1px 0 color-mix(in srgb, white 15%, transparent);
-}
-
-.dark .dropdown-wrapper#sort-container:hover {
-  background: color-mix(in srgb, var(--bg-card) 20%, transparent);
-  box-shadow: 
-    0 4px 12px rgba(0, 0, 0, 0.2),
-    inset 0 1px 0 color-mix(in srgb, white 8%, transparent);
-}
-
-.dropdown-wrapper#sort-container:active {
-  transform: scale(0.98);
-}
-
-/* Ensure dropdown-menu is positioned correctly */
-.dropdown-wrapper#sort-container .dropdown-menu {
-  background: color-mix(in srgb, var(--bg-card) 70%, transparent);
+.sort-dropdown-floating {
+  position: fixed;
+  display: none;
+  z-index: 1000;
+  min-width: 160px;
+  padding: 6px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.15);
   backdrop-filter: blur(12px) saturate(150%);
   -webkit-backdrop-filter: blur(12px) saturate(150%);
   border: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
   box-shadow: 
-    0 2px 8px rgba(0, 0, 0, 0.04),
-    inset 0 1px 0 color-mix(in srgb, white 10%, transparent);
+    0 4px 16px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 color-mix(in srgb, white 10%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, white 5%, transparent);
 }
 
-.dark .dropdown-wrapper#sort-container .dropdown-menu {
-  background: color-mix(in srgb, var(--bg-card) 80%, transparent);
+.sort-dropdown-floating.show {
+  display: block;
+}
+
+.dark .sort-dropdown-floating {
+  background: rgba(30, 30, 30, 0.4);
   box-shadow: 
-    0 2px 8px rgba(0, 0, 0, 0.15),
-    inset 0 1px 0 color-mix(in srgb, white 5%, transparent);
+    0 4px 16px rgba(0, 0, 0, 0.25),
+    inset 0 1px 0 color-mix(in srgb, white 5%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, white 3%, transparent);
 }
 
-/* Make sure dropdown items show icons */
-.dropdown-wrapper#sort-container .dropdown-item {
+/* Sort dropdown items */
+.sort-dropdown-floating .dropdown-item {
   display: flex;
   align-items: center;
   gap: 10px;
-}
-
-.dropdown-wrapper#sort-container .dropdown-item {
+  width: 100%;
   background: transparent;
+  border: none;
   border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
 }
 
-.dropdown-wrapper#sort-container .dropdown-item:hover {
-  background: color-mix(in srgb, var(--primary-light) 30%, transparent);
+.sort-dropdown-floating .dropdown-item:hover {
+  background: color-mix(in srgb, var(--primary) 15%, transparent);
+  color: var(--text-primary);
 }
 
-.dark .dropdown-wrapper#sort-container .dropdown-item:hover {
-  background: color-mix(in srgb, var(--primary-light) 15%, transparent);
+.dark .sort-dropdown-floating .dropdown-item:hover {
+  background: color-mix(in srgb, var(--primary) 20%, transparent);
+}
+
+.sort-dropdown-floating .dropdown-item svg {
+  width: 16px;
+  height: 16px;
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+.sort-dropdown-floating .dropdown-item:hover svg {
+  opacity: 1;
 }
 
 /* Button reset inside glass */
@@ -1555,11 +1619,27 @@ body:has(.app-container) {
   margin: 0;
   height: 100%;
   pointer-events: none;  /* let the glass pane handle hover */
+  transition: transform 0.15s ease;
+}
+
+.toolbar-glass .btn span {
+  color: var(--text-secondary);
+  transition: color 0.15s ease;
+}
+
+.toolbar-glass:hover .btn span {
+  color: var(--text-primary);
 }
 
 .toolbar-glass .btn:hover {
   background: transparent;
   transform: none;
+}
+
+.toolbar-glass:hover .btn svg,
+.dropdown-wrapper#sort-container:hover .btn svg {
+  transform: scale(1.1);
+  transition: transform 0.15s ease;
 }
 
 /* Add hover effect to the glass pane containing the button */
@@ -1586,6 +1666,23 @@ body:has(.app-container) {
 /* Make the glass pane clickable */
 .toolbar-glass:has(.btn):active {
   transform: scale(0.98);
+}
+
+.toolbar-glass:has(input):hover,
+.toolbar-glass:has(input):focus-within {
+  transform: scale(1.02);
+  background: color-mix(in srgb, var(--bg-card) 80%, transparent);
+  box-shadow: 
+    0 4px 12px rgba(0, 0, 0, 0.06),
+    inset 0 1px 0 color-mix(in srgb, white 15%, transparent);
+}
+
+.dark .toolbar-glass:has(input):hover,
+.dark .toolbar-glass:has(input):focus-within {
+  background: color-mix(in srgb, var(--bg-card) 20%, transparent);
+  box-shadow: 
+    0 4px 12px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 color-mix(in srgb, white 8%, transparent);
 }
 
 .images-toolbar input[type="text"] {
@@ -1798,34 +1895,6 @@ body:has(.app-container) {
   flex-direction: column;
 }
 
-.panel-toolbar {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 16px;
-  align-items: center;
-  flex-wrap: wrap;
-  background: var(--bg-card);
-  padding: 12px 16px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border);
-  flex-shrink: 0;
-}
-
-.panel-toolbar-input {
-  flex: 2 0 300px;
-  margin-right: 10px;
-}
-
-.panel-toolbar-input input {
-  width: 100%;
-}
-
-.toolbar-filter-right {
-  width: 300px;
-  max-width: 300px;
-  flex: 0 1 auto;
-}
-
 .toolbar-spacer {
   flex: 1;
 }
@@ -1893,23 +1962,6 @@ body:has(.app-container) {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-}
-
-.hierarchy-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 16px;
-  flex-shrink: 0;
-}
-
-.hierarchy-add-input {
-  flex: 1;
-  margin-right: 10px;
-}
-
-.hierarchy-add-input input {
-  width: 100%;
 }
 
 .hierarchy-tree-wrapper {
