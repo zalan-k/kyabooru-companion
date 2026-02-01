@@ -6,35 +6,6 @@
 // ============================================
 (function initUIEffects() {
   'use strict';
-
-  // Theme toggle functionality
-  const themeCheckbox = document.getElementById('theme-checkbox');
-  
-  function toggleTheme() {
-    document.body.classList.toggle('dark');
-    try {
-      localStorage.setItem('batch-upload-theme', document.body.classList.contains('dark') ? 'dark' : 'light');
-    } catch (e) {
-      // localStorage not available in extension context, ignore
-    }
-  }
-
-  if (themeCheckbox) {
-    themeCheckbox.addEventListener('change', toggleTheme);
-  }
-
-  // Load saved theme
-  try {
-    if (localStorage.getItem('batch-upload-theme') === 'dark') {
-      document.body.classList.add('dark');
-      if (themeCheckbox) {
-        themeCheckbox.checked = true;
-      }
-    }
-  } catch (e) {
-    // localStorage not available in extension context, ignore
-  }
-
   // Clear All button diffuse effect
   const clearAllBtn = document.getElementById('clear-all-btn');
   if (clearAllBtn) {
@@ -69,6 +40,7 @@ class BatchUploader {
     
     this.initializeElements();
     this.setupEventListeners();
+    this.lockedTags = new Set();
   }
 
   initializeElements() {
@@ -87,6 +59,7 @@ class BatchUploader {
     this.progressBar = document.getElementById('progress-bar');
     this.progressText = document.getElementById('progress-text');
     this.statusMessage = document.getElementById('status-message');
+    this.autoSourceToggle = document.getElementById('auto-source-toggle');
   }
 
   setupEventListeners() {
@@ -113,6 +86,11 @@ class BatchUploader {
     this.autocompleteDropdown.style.display = 'none';
     this.tagInput.parentNode.appendChild(this.autocompleteDropdown);
     this.selectedIndex = -1;
+
+    // Auto source toggle
+    this.autoSourceToggle.addEventListener('change', (e) => {
+      this.autoAddSourceTag = e.target.checked;
+    });
 
     // Close dropdown when clicking outside
     document.addEventListener('click', (e) => {
@@ -271,7 +249,7 @@ class BatchUploader {
       'video/mp4'
     ];
     
-    return validTypes.includes(file.type) && file.size <= 100 * 1024 * 1024; // 100MB limit
+    return validTypes.includes(file.type) && file.size <= 150 * 1024 * 1024; // 150MB limit
   }
 
   async generateThumbnails() {
@@ -732,7 +710,8 @@ class BatchUploader {
       const [category, name] = tag.includes(':') ? tag.split(':', 2) : ['general', tag];
       
       const pill = document.createElement('span');
-      pill.className = `tag-pill tag-${category}`;
+      const isLocked = this.lockedTags.has(tag);
+      pill.className = `tag-pill tag-${category}${isLocked ? ' locked' : ''}`;
       pill.setAttribute('data-tag', tag);
       pill.innerHTML = `
         <span class="tag-content">${name}</span> 
@@ -753,6 +732,18 @@ class BatchUploader {
         this.showCategoryDropdown(pill, tag);
       });
       
+      // Double-click to toggle lock
+      pill.addEventListener('dblclick', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (this.lockedTags.has(tag)) {
+          this.lockedTags.delete(tag);
+        } else {
+          this.lockedTags.add(tag);
+        }
+        this.renderTags();
+      });
+
       this.tagDisplay.appendChild(pill);
     });
   }
@@ -823,6 +814,7 @@ class BatchUploader {
   }
 
   removeTag(tag) {
+    if (this.lockedTags.has(tag)) return;
     this.sharedTags = this.sharedTags.filter(t => t !== tag);
     this.renderTags();
   }
@@ -864,6 +856,11 @@ class BatchUploader {
         // Use the source URL if provided, otherwise use a file reference
         const sourceUrl = this.sourceUrl || `file://${fileData.name}`;
         
+        if (this.autoAddSourceTag && !this.sharedTags.includes('meta:original_source')) {
+          this.sharedTags.push('meta:original_source');
+          this.renderTags();
+        }
+
         // Create the data object for saving
         const saveData = {
           url: sourceUrl,
@@ -964,7 +961,7 @@ class BatchUploader {
 
   clearAll() {
     this.files = [];
-    this.sharedTags = [];
+    this.sharedTags = this.sharedTags.filter(tag => this.lockedTags.has(tag));
     this.poolId = null;
     this.sourceUrl = '';
     
