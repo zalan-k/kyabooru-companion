@@ -115,6 +115,32 @@ window.TagSaver.UI.Overlay = (function() {
     }
   }
 
+  /**
+   * Load only the last saved tags into the overlay
+   */
+  function loadLastTagsOnly() {
+    const lastData = loadLastSavedData();
+    if (!lastData || !lastData.tags || lastData.tags.length === 0) {
+      Toast.showError("No tags found in memory");
+      return;
+    }
+
+    const tagDisplay = overlayElement.querySelector('#tag-display');
+    if (tagDisplay) {
+      TagPills.renderTagPills(
+        lastData.tags, 
+        tagDisplay,
+        (deletedTag) => {
+          console.log(`Tag deleted: ${deletedTag}`);
+        },
+        (oldTag, newTag, newCategory) => {
+          console.log(`Tag category changed: ${oldTag} -> ${newTag}`);
+        }
+      );
+      Toast.showSuccess(`Loaded ${lastData.tags.length} tags from memory`);
+    }
+  }
+
 function positionImagePreview(previewElement, overlayContent) {
   if (!previewElement || !overlayContent) return;
   
@@ -259,11 +285,18 @@ function createOverlay(options = {}) {
       <div class="pool-container">
         <div class="pool-header">
           <span class="pool-title">Image Pool</span>
-          <div class="header-buttons">
-            <button id="load-last-tags-id" class="memory-button" title="Load last saved tags and pool ID">🏷️</button>
-            <button id="load-last-id" class="memory-button" title="Load last saved pool ID only">🆔</button>
-            <button id="generate-pool-id" class="pool-button">Generate ID</button>
-          </div>
+            <div class="header-buttons">
+              <button id="load-last-tags-id" class="pool-action-btn" title="Load last saved tags and pool ID">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+              </button>
+              <button id="load-last-tags" class="pool-action-btn" title="Load last saved tags only">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"/><path d="M7 7h.01"/></svg>
+              </button>
+              <button id="load-last-id" class="pool-action-btn" title="Load last saved pool ID only">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="14" x="3" y="5" rx="2" ry="2"/><path d="M7 15h4M15 15h2M7 11h2M13 11h4"/></svg>
+              </button>
+              <button id="generate-pool-id" class="pool-action-btn pool-action-btn-text">Generate</button>
+            </div>
         </div>
         <div class="pool-fields">
           <div class="pool-field-row">
@@ -289,6 +322,7 @@ function createOverlay(options = {}) {
   const poolIdInput = overlay.querySelector('#pool-id');
   const poolIndexInput = overlay.querySelector('#pool-index');
   const loadLastTagsIdButton = overlay.querySelector('#load-last-tags-id');
+  const loadLastTagsButton = overlay.querySelector('#load-last-tags');
   const loadLastIdButton = overlay.querySelector('#load-last-id');
 
   // Focus the input - ensures cursor is after the space that's preloaded
@@ -297,6 +331,7 @@ function createOverlay(options = {}) {
 
   // Memory button event listeners
   loadLastTagsIdButton.addEventListener('click', loadLastTagsAndId);
+  loadLastTagsButton.addEventListener('click', loadLastTagsOnly);
   loadLastIdButton.addEventListener('click', loadLastIdOnly);
   
   generatePoolIdButton.addEventListener('click', () => {

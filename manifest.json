@@ -26,7 +26,7 @@
   "commands": {
     "open-overlay": {
       "suggested_key": {
-        "default": "Ctrl+Shift+U"
+        "default": "F2"
       },
       "description": "Open tag saver overlay or image picker"
     }

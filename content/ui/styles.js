@@ -627,27 +627,46 @@ function removeStyles(styleElement) {
   /**
    * Memory buttons styles
    */
-  const memoryButtonStyles = `
-    .memory-button {
-      background: rgba(74, 137, 220, 0.3);
-      border: 1px solid rgba(74, 137, 220, 0.5);
-      color: white;
-      padding: 3px 8px;
+  const poolActionButtonStyles = `
+    .header-buttons {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .pool-action-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(100, 116, 139, 0.15);
+      border: none;
+      color: rgba(255, 255, 255, 0.7);
+      padding: 6px;
       border-radius: 4px;
       cursor: pointer;
-      font-size: 11px;
       transition: all 0.2s ease;
-      white-space: nowrap;
     }
-    
-    .memory-button:hover {
-      background: rgba(74, 137, 220, 0.5);
-      border-color: rgba(74, 137, 220, 0.7);
-      transform: translateY(-2px);
+
+    .pool-action-btn:hover {
+      background: rgba(100, 116, 139, 0.35);
+      color: rgba(255, 255, 255, 0.95);
+      transform: translateY(-1px);
     }
-    
-    .memory-button:active {
+
+    .pool-action-btn:active {
       transform: translateY(0);
+    }
+
+    .pool-action-btn svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    .pool-action-btn-text {
+      padding: 6px 10px;
+      font-size: 11px;
+      font-weight: 600;
+      font-family: inherit;
     }
   `;
 
@@ -664,7 +683,7 @@ function removeStyles(styleElement) {
       ${toastStyles}
       ${autocompleteStyles}
       ${poolMemoryStyles}
-      ${memoryButtonStyles}
+      ${poolActionButtonStyles}
       ${duplicateWarningStyles}
       ${mediaPlaceholderStyles}
     `;
@@ -681,7 +700,7 @@ function removeStyles(styleElement) {
     toastStyles,
     autocompleteStyles,
     poolMemoryStyles,
-    memoryButtonStyles,
+    poolActionButtonStyles,
     getAllStyles
   };
 })();

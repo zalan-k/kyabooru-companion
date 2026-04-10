@@ -52,7 +52,11 @@ function init() {
 
   // Add keyboard shortcut after all components are ready
   document.addEventListener('keydown', (e) => {
-    if (e.ctrlKey && e.shiftKey && e.key === 'U') handleSmartOverlay();
+    if (e.ctrlKey && e.altKey) {
+      console.log('Ctrl+Alt pressed with key:', e.key);
+    }
+    //if (e.ctrlKey && e.shiftKey && e.key === 'U') handleSmartOverlay();
+    if (e.key == 'F2') handleSmartOverlay();
   });    
   
   // Console log
