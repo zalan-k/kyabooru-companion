@@ -857,7 +857,7 @@ class BatchUploader {
         const sourceUrl = this.sourceUrl || `file://${fileData.name}`;
         
         if (this.autoAddSourceTag && !this.sharedTags.includes('meta:original_source')) {
-          this.sharedTags.push('meta:original_source');
+          this.sharedTags.push('meta:original_source_restricted');
           this.renderTags();
         }
 
