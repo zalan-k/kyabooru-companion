@@ -4,6 +4,8 @@
 const API_BASE = 'http://localhost:3737';
 const VALID_CATEGORIES = ['artist', 'character', 'copyright', 'general', 'meta'];
 
+
+
 // ============================================
 // SAVE QUEUE
 // ============================================
@@ -207,49 +209,100 @@ async function runAnalyzer() {
 }
 
 async function saveCurrentImage() {
-    if (!currentImageId || !currentImageData) return;
+  if (selectedIds.size === 0) return;
 
-    try {
-      await apiCall(`/api/staging/images/${encodeURIComponent(currentImageId)}`, {
-        method: 'PUT',
-        body: JSON.stringify({
-          tags: currentImageData.tags,
-          sourceUrl: document.getElementById('sidebar-source-url').value,
-          poolId: document.getElementById('sidebar-pool-id').value || null,
-          poolIndex: parseInt(document.getElementById('sidebar-pool-index').value) || null
-        })
-      });
-      showToast('Image saved');
-      
-      const card = document.querySelector(`.image-card[data-id="${currentImageId}"]`);
-      if (card) {
-        const badge = card.querySelector('.tag-count-badge');
-        if (badge) badge.textContent = `${currentImageData.tags.length} tags`;
-      }
-    } catch (error) {
-      showToast('Failed to save image', 'error');
+  // Multi-select: just push the pending-tags buffer to all selected
+  if (selectedIds.size > 1) {
+    if (pendingTagAdditions.length === 0) {
+      showToast('No tags to add', 'info');
+      return;
     }
+    try {
+      const summary = await apiCall('/api/staging/images/batch', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          ids: [...selectedIds],
+          addTags: pendingTagAdditions,
+        }),
+      });
+      const msg = summary.failed > 0
+        ? `Tagged ${summary.succeeded}/${summary.total} (${summary.failed} failed)`
+        : `Tagged ${summary.succeeded} images`;
+      showToast(msg, summary.failed > 0 ? 'warning' : 'success');
+      pendingTagAdditions = [];
+      renderPendingTags();
+
+      // Refresh visible badges on cards (the count went up by N tags each)
+      // Cheapest correct refresh: reload the grid.
+      loadImages(true);
+    } catch (err) {
+      showToast(`Batch tag failed: ${err.message}`, 'error');
+    }
+    return;
+  }
+
+  // Single-select: existing flow, unchanged
+  if (!currentImageData) return;
+  const id = [...selectedIds][0];
+  try {
+    await apiCall(`/api/staging/images/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        tags: currentImageData.tags,
+        sourceUrl: document.getElementById('sidebar-source-url').value,
+        poolId: document.getElementById('sidebar-pool-id').value || null,
+        poolIndex: parseInt(document.getElementById('sidebar-pool-index').value) || null,
+      }),
+    });
+    showToast('Image saved');
+
+    const card = document.querySelector(`.image-card[data-id="${id}"]`);
+    if (card) {
+      const badge = card.querySelector('.tag-count-badge');
+      if (badge) badge.textContent = `${currentImageData.tags.length} tags`;
+    }
+  } catch (error) {
+    showToast('Failed to save image', 'error');
+  }
 }
 
 async function deleteCurrentImage() {
-    if (!currentImageId) return;
-    if (!confirm('Delete this image from staging?')) return;
+  if (selectedIds.size === 0) return;
 
-    try {
-      await apiCall(`/api/staging/images/${encodeURIComponent(currentImageId)}`, {
-        method: 'DELETE'
-      });
-      showToast('Image deleted');
+  const count = selectedIds.size;
+  const confirmMsg = count === 1
+    ? 'Delete this image from staging?'
+    : `Delete ${count} images from staging?`;
+  if (!confirm(confirmMsg)) return;
 
-      const card = document.querySelector(`.image-card[data-id="${currentImageId}"]`);
-      if (card) card.remove();
+  try {
+    const summary = await apiCall('/api/staging/images/batch', {
+      method: 'DELETE',
+      body: JSON.stringify({ ids: [...selectedIds] }),
+    });
 
-      stagingImages = stagingImages.filter(img => img.id !== currentImageId);
-      closeSidebar();
-      updateAllCounts();
-    } catch (error) {
-      showToast('Failed to delete image', 'error');
-    }
+    const msg = summary.failed > 0
+      ? `Deleted ${summary.succeeded}/${summary.total} (${summary.failed} failed)`
+      : `Deleted ${summary.succeeded} image${summary.succeeded === 1 ? '' : 's'}`;
+    showToast(msg, summary.failed > 0 ? 'warning' : 'success');
+
+    // Remove successful cards from the DOM
+    summary.results.forEach(r => {
+      if (r.success) {
+        const card = document.querySelector(`.image-card[data-id="${r.id}"]`);
+        if (card) card.remove();
+      }
+    });
+
+    // Update local cache + close sidebar
+    const successIds = new Set(summary.results.filter(r => r.success).map(r => r.id));
+    stagingImages = stagingImages.filter(img => !successIds.has(img.id));
+    selectedIds = new Set([...selectedIds].filter(id => !successIds.has(id)));
+    applySelection();
+    updateAllCounts();
+  } catch (error) {
+    showToast(`Delete failed: ${error.message}`, 'error');
+  }
 }
 
 function generatePoolId() {
@@ -332,25 +385,239 @@ async function loadImages(reset = false) {
     }
 }
 
-async function selectImage(id) {
-    document.querySelectorAll('.image-card').forEach(c => c.classList.remove('selected'));
-    const card = document.querySelector(`.image-card[data-id="${id}"]`);
-    if (card) card.classList.add('selected');
+async function loadSidebarSingle(id) {
+  try {
+    currentImageData = await apiCall(`/api/staging/images/${encodeURIComponent(id)}`);
 
-    try {
-      currentImageId = id;
-      currentImageData = await apiCall(`/api/staging/images/${encodeURIComponent(id)}`);
+    document.getElementById('sidebar-image').src =
+      `${API_BASE}/api/staging/image/${encodeURIComponent(id)}`;
+    document.getElementById('sidebar-source-url').value = currentImageData.sourceUrl || '';
+    document.getElementById('sidebar-pool-id').value = currentImageData.poolId || '';
+    document.getElementById('sidebar-pool-index').value = currentImageData.poolIndex ?? '';
+    document.getElementById('sidebar-phash').value = currentImageData.phash || '';
 
-      document.getElementById('sidebar-image').src = 
-        `${API_BASE}/api/staging/image/${encodeURIComponent(id)}`;
-      document.getElementById('sidebar-source-url').value = currentImageData.sourceUrl || '';
-      document.getElementById('sidebar-pool-id').value = currentImageData.poolId || '';
-      document.getElementById('sidebar-pool-index').value = currentImageData.poolIndex ?? '';
-      document.getElementById('sidebar-phash').value = currentImageData.phash || '';
+    // Clear multi-select state if any
+    pendingTagAdditions = [];
 
-      renderSidebarTags();
-      document.getElementById('image-sidebar').classList.remove('hidden');
-    } catch (error) {
-      showToast('Failed to load image details', 'error');
-    }
+    // Re-enable everything (in case we were just in multi-select mode)
+    setSidebarMultiMode(false);
+
+    renderSidebarTags();
+    document.getElementById('image-sidebar').classList.remove('hidden');
+  } catch (error) {
+    showToast('Failed to load image details', 'error');
+  }
 }
+
+function selectImage(id) {
+  selectedIds.clear();
+  selectedIds.add(id);
+  lastClickedId = id;
+  applySelection();
+}
+
+// ============================================
+// BOORU UPLOAD WITH PROGRESS
+// ============================================
+
+// SVG path strings for the three cloud states. Swapped into the icon
+// element by replacing innerHTML — same width/height/stroke, only the
+// paths differ.
+const CLOUD_ICONS = {
+  check: `<path d="m9 16 2 2 4-4"/>`,
+  cog: `
+    <path d="m8 17 4-4 4 4"/>
+    <path d="M12 13v9"/>
+  `,
+  alert: `
+    <path d="M12 12v4"/>
+    <path d="M12 20h.01"/>
+  `,
+};
+
+const cloudStatus = (() => {
+  let card, icon, text, hideTimeout;
+
+  function ensure() {
+    if (card) return;
+    card = document.getElementById('cloud-status-card');
+    icon = document.getElementById('cloud-status-icon');
+    text = document.getElementById('cloud-status-text');
+  }
+
+  function setState(state, label, iconKey) {
+    ensure();
+    card.classList.remove('state-uploading', 'state-error');
+    if (state) card.classList.add('state-' + state);
+    text.textContent = label;
+    // Only update the accent group, not the whole icon
+    const accent = document.getElementById('cloud-status-accent');
+    if (accent) accent.innerHTML = CLOUD_ICONS[iconKey];
+  }
+
+  function idle() {
+    clearTimeout(hideTimeout);
+    setState(null, 'Synced', 'check');
+  }
+
+  function start(total) {
+    clearTimeout(hideTimeout);
+    setState('uploading', `0/${total}`, 'cog');
+  }
+
+  function update(completed, total) {
+    setState('uploading', `${completed}/${total}`, 'cog');
+  }
+
+  function complete(succeeded, failed) {
+    if (failed > 0) {
+      setState('error', `${failed} error${failed === 1 ? '' : 's'}`, 'alert');
+      // Auto-clear error state after 6s
+      hideTimeout = setTimeout(idle, 6000);
+    } else {
+      setState(null, 'Synced', 'check');
+    }
+  }
+
+  function fail() {
+    setState('error', 'Failed', 'alert');
+    hideTimeout = setTimeout(idle, 6000);
+  }
+
+  return { idle, start, update, complete, fail };
+})();
+
+// Initialize to idle on page load
+document.addEventListener('DOMContentLoaded', () => cloudStatus.idle());
+
+// Parse one SSE event block ("event: foo\ndata: {...}").
+function parseSSEEvent(raw) {
+  const lines = raw.split('\n');
+  let eventType = 'message';
+  let data = '';
+  for (const line of lines) {
+    if (line.startsWith('event:')) eventType = line.slice(6).trim();
+    else if (line.startsWith('data:')) data += line.slice(5).trim();
+  }
+  if (!data) return null;
+  try {
+    return { type: eventType, data: JSON.parse(data) };
+  } catch {
+    return { type: eventType, data };
+  }
+}
+
+let isBooruUploading = false;
+
+/**
+ * POST to /upload-to-booru/stream and feed events.
+ * Returns the final summary on success. Throws on transport / fatal error.
+ */
+async function streamBooruUpload(payload) {
+  if (isBooruUploading) {
+    throw new Error('An upload is already in progress');
+  }
+  isBooruUploading = true;
+
+  try {
+    const response = await fetch(`${API_BASE}/api/staging/upload-to-booru/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errBody = await response.json().catch(() => ({ error: response.statusText }));
+      throw new Error(errBody.error || `Server returned ${response.status}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let summary = null;
+    let fatalError = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      // Events are separated by a blank line (\n\n).
+      let idx;
+      while ((idx = buffer.indexOf('\n\n')) !== -1) {
+        const rawEvent = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 2);
+
+        const ev = parseSSEEvent(rawEvent);
+        if (!ev) continue;
+
+        switch (ev.type) {
+          case 'start':   cloudStatus.start(ev.data.total); break;
+          case 'item':    cloudStatus.update(ev.data.completed, ev.data.total); break;
+          case 'done':    cloudStatus.complete(ev.data.succeeded, ev.data.failed); break;
+          case 'error':   cloudStatus.fail(); break;
+        }
+      }
+    }
+
+    if (fatalError) throw fatalError;
+    return summary;
+  } catch (err) {
+    // Network / transport errors that fired before any 'error' event arrived.
+    throw err;
+  } finally {
+    isBooruUploading = false;
+  }
+}
+
+/** Trigger: upload all un-uploaded staging images. */
+async function startBooruUploadAll() {
+  if (!confirm('Upload all un-uploaded staging images to the booru?')) return;
+  try {
+    await streamBooruUpload({ all: true });
+    loadImages(true); // refresh grid (will pick up overlay state once that lands)
+  } catch (err) {
+    console.error('Booru upload failed:', err);
+  }
+}
+
+/** Trigger: upload the currently selected staging image. */
+async function uploadCurrentImageToBooru() {
+  if (selectedIds.size === 0) {
+    showToast('No image selected', 'error');
+    return;
+  }
+  try {
+    await streamBooruUpload({ ids: [...selectedIds] });
+    // Refresh whatever's visible — single image gets re-fetched, otherwise reload grid
+    if (selectedIds.size === 1) {
+      const id = [...selectedIds][0];
+      loadSidebarSingle(id);
+    } else {
+      loadImages(true);
+    }
+  } catch (err) {
+    console.error('Booru upload failed:', err);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const uploadAllBtn = document.getElementById('upload-to-booru-btn');
+  if (uploadAllBtn) uploadAllBtn.addEventListener('click', startBooruUploadAll);
+
+  const sidebarUploadBtn = document.getElementById('sidebar-upload-btn');
+  if (sidebarUploadBtn) sidebarUploadBtn.addEventListener('click', uploadCurrentImageToBooru);
+
+  const closeBtn = document.getElementById('sidebar-close-btn');
+  if (closeBtn) closeBtn.addEventListener('click', closeSidebar);
+
+  const saveBtn = document.getElementById('sidebar-save-btn');
+  if (saveBtn) saveBtn.addEventListener('click', saveCurrentImage);
+
+  const deleteBtn = document.getElementById('sidebar-delete-btn');
+  if (deleteBtn) deleteBtn.addEventListener('click', deleteCurrentImage);
+
+  const newPoolBtn = document.getElementById('sidebar-new-pool-btn');
+  if (newPoolBtn) newPoolBtn.addEventListener('click', generatePoolId);
+});

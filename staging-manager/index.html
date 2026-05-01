@@ -38,6 +38,15 @@
               Analyze Tags
             </button>
             <div class="dropdown-divider"></div>
+            <button class="dropdown-item" id="upload-to-booru-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/>
+                <line x1="12" y1="3" x2="12" y2="15"/>
+              </svg>
+              Upload to Booru
+            </button>
+            <div class="dropdown-divider"></div>
             <div class="dropdown-submenu">
               <button class="dropdown-item has-submenu">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -135,6 +144,21 @@
           <div class="stat-card danger">
             <div class="stat-value" id="stat-blacklist">0</div>
             <div class="stat-label">Blacklisted</div>
+          </div>
+          <div class="stat-card cloud-status" id="cloud-status-card">
+            <div class="cloud-status-row">
+              <svg class="cloud-status-icon" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                <!-- Cloud arc — never changes. The d attribute uses the cloud-upload
+                    cloud shape since it accommodates both check and arrow children. -->
+                <path d="M17.5 19a4.5 4.5 0 1 0 0-9h-1.8a7 7 0 1 0-12.7 5.3"/>
+                <!-- Accent slot — populated per state by JS -->
+                <g class="cloud-accent" id="cloud-status-accent"></g>
+              </svg>
+              <div class="stat-value cloud-status-text" id="cloud-status-text">Synced</div>
+            </div>
+            <div class="stat-label">Cloud status</div>
           </div>
         </div>
       </div>
@@ -245,7 +269,7 @@
           <aside class="image-sidebar hidden" id="image-sidebar">
             <div class="sidebar-header">
               <h3>Edit Image</h3>
-              <button class="btn btn-icon btn-ghost" onclick="closeSidebar()">
+              <button class="btn btn-icon btn-ghost" id="sidebar-close-btn">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <line x1="18" y1="6" x2="6" y2="18"/>
                   <line x1="6" y1="6" x2="18" y2="18"/>
@@ -265,7 +289,7 @@
                 <div class="pool-row">
                   <input type="text" id="sidebar-pool-id" placeholder="Pool ID">
                   <input type="number" id="sidebar-pool-index" placeholder="#" min="0">
-                  <button class="btn btn-small btn-ghost" onclick="generatePoolId()">New</button>
+                  <button class="btn btn-small btn-ghost" id="sidebar-new-pool-btn">New</button>
                 </div>
               </div>
               <div class="sidebar-field">
@@ -282,7 +306,7 @@
               </div>
             </div>
             <div class="sidebar-actions">
-              <button class="btn btn-primary" onclick="saveCurrentImage()">
+              <button class="btn btn-primary" id="sidebar-save-btn">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
                   <polyline points="17 21 17 13 7 13 7 21"/>
@@ -290,7 +314,15 @@
                 </svg>
                 <span>Save</span>
               </button>
-              <button class="btn btn-secondary btn-danger-text" onclick="deleteCurrentImage()">
+              <button class="btn btn-secondary" id="sidebar-upload-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="17 8 12 3 7 8"/>
+                  <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                <span>Upload</span>
+              </button>
+              <button class="btn btn-secondary btn-danger-text" id="sidebar-delete-btn">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <polyline points="3 6 5 6 21 6"/>
                   <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>

@@ -15,12 +15,14 @@
     }
   };
 
-  let stagingImages = [];
-  let currentImageId = null;
-  let currentImageData = null;
-  let imagesOffset = 0;
-  let imagesLoading = false;
-  let imagesHasMore = true;
+  let stagingImages       = [];
+  let selectedIds         = new Set();
+  let lastClickedId       = null;
+  let currentImageData    = null;
+  let pendingTagAdditions = [];
+  let imagesOffset        = 0;
+  let imagesLoading       = false;
+  let imagesHasMore       = true;
 
   let collapsedNodes = new Set();
   let autocompleteSelectedIndex = -1;
@@ -497,24 +499,164 @@
   // ============================================
   // IMAGES TAB
   // ============================================
-  function renderImages(newImages) {
-    const grid = document.getElementById('images-grid');
-    
-    newImages.forEach(img => {
-      const card = document.createElement('div');
-      card.className = 'image-card';
-      card.dataset.id = img.id;
-      card.onclick = () => selectImage(img.id);
+function renderImages(newImages) {
+  const grid = document.getElementById('images-grid');
 
-      card.innerHTML = `
-        <img src="${API_BASE}/api/staging/thumbnail/${encodeURIComponent(img.id)}?size=200" 
-              alt="${escapeHtml(img.filename || '')}" loading="lazy"
-              onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%231a1a2e%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2255%22 text-anchor=%22middle%22 fill=%22%23666%22 font-size=%2212%22>No Image</text></svg>'">
-        <span class="tag-count-badge">${img.tagCount || 0} tags</span>
-        ${img.poolId ? '<span class="pool-badge">Pool</span>' : ''}
-      `;
+  newImages.forEach(img => {
+    const card = document.createElement('div');
+    card.className = 'image-card' + (img.booruPostId ? ' uploaded' : '');
+    card.dataset.id = img.id;
+    card.addEventListener('click', (e) => handleCardClick(img.id, e));
 
-      grid.appendChild(card);
+    const booruOverlay = img.booruPostId ? `
+      <a class="booru-frost-icon-link"
+        href="${img.booruPublicUrl}"
+        target="_blank"
+        rel="noopener"
+        title="View on booru (post #${img.booruPostId})"
+        onclick="event.stopPropagation()">
+        <svg class="booru-frost-icon" viewBox="0 0 24 24" fill="none"
+            stroke="none" stroke-width="1.5"
+            stroke-linecap="round" stroke-linejoin="round">
+          <path fill-rule="evenodd" clip-rule="evenodd" d="M17.4975 18.4851L20.6281 9.09378C21.419 6.72107 21.9594 5.1 21.9978 3.97919C22.0108 3.60165 21.5845 3.47624 21.3173 3.74336L6.85855 18.2022C6.62519 18.4355 6.6807 18.8286 6.99826 18.9185C7.02946 18.9273 7.0609 18.9356 7.09257 18.9433C7.59254 19.0657 8.24578 18.977 9.5522 18.7997L9.62363 18.79C9.99191 18.74 10.1761 18.715 10.3529 18.7257C10.6738 18.7451 10.9838 18.8496 11.251 19.0286C11.3981 19.1271 11.5295 19.2586 11.7923 19.5213L12.0436 19.7726C13.5539 21.2828 14.309 22.0379 15.1101 21.9986C15.3309 21.9877 15.5479 21.9365 15.7503 21.8475C16.4844 21.5244 16.8221 20.5113 17.4975 18.4851Z" fill="currentColor"/>
+          <path d="M14.906 3.37194L5.57477 6.48223C3.49295 7.17615 2.45203 7.5231 2.13608 8.28642C2.06182 8.46582 2.01692 8.65601 2.00311 8.84968C1.94433 9.6737 2.72018 10.4495 4.27188 12.0012L4.55451 12.2838C4.80921 12.5385 4.93655 12.6658 5.03282 12.8076C5.22269 13.0871 5.33046 13.4143 5.34393 13.752C5.35076 13.9232 5.32403 14.1013 5.27057 14.4575C5.07488 15.7613 4.97703 16.4131 5.0923 16.9148C5.09632 16.9322 5.1005 16.9497 5.10484 16.967C5.18629 17.292 5.58551 17.3539 5.82242 17.117L20.2567 2.68271C20.5238 2.41559 20.3984 1.9893 20.0209 2.00224C18.9 2.04066 17.2788 2.58102 14.906 3.37194Z" fill="currentColor"/>
+        </svg>
+        
+      </a>
+    ` : '';
+
+    card.innerHTML = `
+      <img src="${API_BASE}/api/staging/thumbnail/${encodeURIComponent(img.id)}?size=200"
+            alt="${escapeHtml(img.filename || '')}" loading="lazy"
+            onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%231a1a2e%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2255%22 text-anchor=%22middle%22 fill=%22%23666%22 font-size=%2212%22>No Image</text></svg>'">
+      <span class="tag-count-badge">${img.tagCount || 0} tags</span>
+      ${img.poolId ? '<span class="pool-badge">Pool</span>' : ''}
+      ${booruOverlay}
+    `;
+
+    grid.appendChild(card);
+  });
+}
+
+  function handleCardClick(id, event) {
+    if (event.shiftKey && lastClickedId) {
+      // Range select from lastClickedId to id, in current grid order
+      const cards = Array.from(document.querySelectorAll('.image-card'));
+      const order = cards.map(c => c.dataset.id);
+      const a = order.indexOf(lastClickedId);
+      const b = order.indexOf(id);
+      if (a !== -1 && b !== -1) {
+        const [from, to] = a < b ? [a, b] : [b, a];
+        // Shift-click extends the existing selection rather than replacing it
+        for (let i = from; i <= to; i++) selectedIds.add(order[i]);
+      }
+    } else if (event.ctrlKey || event.metaKey) {
+      // Toggle this one in/out of selection
+      if (selectedIds.has(id)) selectedIds.delete(id);
+      else selectedIds.add(id);
+      lastClickedId = id;
+    } else {
+      // Plain click — collapse to single selection
+      selectedIds.clear();
+      selectedIds.add(id);
+      lastClickedId = id;
+    }
+
+    applySelection();
+  }
+
+  async function applySelection() {
+    // Update card visuals
+    document.querySelectorAll('.image-card').forEach(card => {
+      card.classList.toggle('selected', selectedIds.has(card.dataset.id));
+    });
+
+    if (selectedIds.size === 0) {
+      closeSidebar();
+      return;
+    }
+
+    if (selectedIds.size === 1) {
+      // Single-select: existing flow, fetch and populate
+      const id = [...selectedIds][0];
+      await loadSidebarSingle(id);
+    } else {
+      // Multi-select: blank everything except the tag input
+      showSidebarMulti(selectedIds.size);
+    }
+  }
+
+  function showSidebarMulti(count) {
+    // Make sure the sidebar is open
+    document.getElementById('image-sidebar').classList.remove('hidden');
+
+    // Switch to multi mode visually
+    setSidebarMultiMode(true);
+
+    // Replace preview with placeholder
+    document.getElementById('sidebar-image').removeAttribute('src');
+
+    // Blank per-image fields
+    document.getElementById('sidebar-source-url').value = '';
+    document.getElementById('sidebar-pool-id').value = '';
+    document.getElementById('sidebar-pool-index').value = '';
+    document.getElementById('sidebar-phash').value = '';
+
+    // Tags display: render the pending-additions buffer (empty on entry)
+    renderPendingTags();
+
+    // Update the sidebar header to reflect count
+    const header = document.querySelector('#image-sidebar .sidebar-header h3');
+    if (header) header.textContent = `${count} images selected`;
+
+    currentImageData = null; // not single-select
+  }
+
+  // Toggle the multi-mode CSS class on the sidebar root and disable the
+  // per-image fields. The .multi-select-mode class drives the placeholder +
+  // disabled-look styling (see CSS section below).
+  function setSidebarMultiMode(on) {
+    const sidebar = document.getElementById('image-sidebar');
+    sidebar.classList.toggle('multi-select-mode', on);
+
+    ['sidebar-source-url', 'sidebar-pool-id', 'sidebar-pool-index',
+    'sidebar-phash', 'sidebar-new-pool-btn'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.disabled = on;
+    });
+
+    // Reset header back to default in single mode
+    if (!on) {
+      const header = document.querySelector('#image-sidebar .sidebar-header h3');
+      if (header) header.textContent = 'Edit Image';
+    }
+  }
+
+  // Render the pending-tag-additions buffer in the sidebar tags container.
+  // Same pill component as single-select, but pills come from
+  // `pendingTagAdditions`, and removing one removes from the buffer (not
+  // from any image).
+  function renderPendingTags() {
+    const container = document.getElementById('sidebar-tags');
+    container.innerHTML = '';
+
+    pendingTagAdditions.forEach(tag => {
+      const { category, name } = parseTag(tag);
+      const pill = createTagPill(tag, category, name, {
+        onRemove: () => {
+          pendingTagAdditions = pendingTagAdditions.filter(t => t !== tag);
+          renderPendingTags();
+        },
+        onCategoryChange: (newCat) => {
+          const newTag = newCat === 'general' ? name : `${newCat}:${name}`;
+          const idx = pendingTagAdditions.indexOf(tag);
+          if (idx !== -1) {
+            pendingTagAdditions[idx] = newTag;
+            renderPendingTags();
+          }
+        },
+      });
+      container.appendChild(pill);
     });
   }
 
@@ -547,10 +689,16 @@
   }
 
   function handleSidebarTagSelect(tag) {
-    if (!currentImageData) return;
-    if (!currentImageData.tags.includes(tag)) {
-      currentImageData.tags.push(tag);
-      renderSidebarTags();
+    if (selectedIds.size > 1) {
+      if (!pendingTagAdditions.includes(tag)) {
+        pendingTagAdditions.push(tag);
+        renderPendingTags();
+      }
+    } else if (currentImageData) {
+      if (!currentImageData.tags.includes(tag)) {
+        currentImageData.tags.push(tag);
+        renderSidebarTags();
+      }
     }
     document.getElementById('sidebar-tag-input').value = '';
   }
