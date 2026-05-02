@@ -1278,6 +1278,23 @@ async function getPoolHighestIndex(poolId) {
   return await getPoolHighestIndexIndexedDB(poolId);
 }
 
+async function generatePoolId() {
+  if (settings.useLocalServer) {
+    try {
+      const serverAvailable = await checkServerConnection();
+      if (serverAvailable) {
+        const result = await apiRequest('/api/pools/new');
+        return { success: true, poolId: result.poolId, source: 'server' };
+      }
+    } catch (error) {
+      console.error("Server pool generation failed:", error);
+    }
+  }
+  // Fallback: client-side, accept rare collision risk
+  const poolId = Math.random().toString(36).substring(2, 10);
+  return { success: true, poolId, source: 'client-fallback' };
+}
+
 async function getPoolHighestIndexIndexedDB(poolId) {
   return new Promise((resolve, reject) => {
     try {
@@ -1396,6 +1413,12 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
       });
     return true; // Required for async sendResponse
   }
+  else if (message.action === "generate-pool-id") {
+    generatePoolId()
+      .then(result => sendResponse(result))
+      .catch(error => sendResponse({ success: false, error: error.message }));
+    return true;
+  } 
   else if (message.action === "get-pool-highest-index") {
     getPoolHighestIndex(message.poolId)
       .then(index => sendResponse({ success: true, highestIndex: index }))
@@ -1474,5 +1497,5 @@ browser.runtime.onInstalled.addListener(async (details) => {
   setTimeout(warmupServer, 500);
   
   // Warm up server periodically (every 2 minutes) to keep connection alive
-  setInterval(warmupServer, 120000);
+  setInterval(warmupServer, 10000);
 })();

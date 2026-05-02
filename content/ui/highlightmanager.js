@@ -195,7 +195,9 @@ window.TagSaver.UI.HighlightManager = (function() {
       console.log("Not on a supported site, highlight manager not started");
       return;
     }
-    
+    if (window.TagSaver.settings?.useLocalServer && window.TagSaver.settings?.serverUrl) {
+      fetch(`${window.TagSaver.settings.serverUrl}/api/warmup`).catch(() => {});
+    }
     console.log("Starting image monitoring for duplicates on supported site");
     isEnabled = true;
     initHighlightManager();

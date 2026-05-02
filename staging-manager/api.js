@@ -92,11 +92,12 @@ function showConnectionAlert(message, type = 'info') {
         <div style="font-weight:500;margin-bottom:4px;">${type === 'success' ? '✅ Connected' : type === 'error' ? '❌ Connection Error' : '⚠️ Warning'}</div>
         <div style="font-size:12px;opacity:0.9;">${escapeHtml(message)}</div>
       </div>
-      <button onclick="this.parentElement.remove()" style="background:none;border:none;color:inherit;cursor:pointer;font-size:18px;">×</button>
+      <button class="connection-alert-close" style="background:none;border:none;color:inherit;cursor:pointer;font-size:18px;">×</button>
     `;
     
     document.body.appendChild(alert);
-    
+    alert.querySelector('.connection-alert-close').addEventListener('click', () => alert.remove());
+
     // Auto-hide success messages after 3 seconds
     if (type === 'success') {
       setTimeout(() => {
@@ -131,6 +132,8 @@ async function apiCall(endpoint, options = {}) {
 async function loadConfig() {
     try {
         config = await apiCall('/api/config');
+        delete config.suggestions;
+        delete config.dismissed;
         renderAliases();
         renderExclusions();
         renderHierarchy();
@@ -197,15 +200,26 @@ async function saveHierarchy() {
 }
 
 async function runAnalyzer() {
-    showToast('Running tag analyzer...', 'info');
-    try {
-      const result = await apiCall('/api/config/analyze', { method: 'POST' });
-      showToast(`Found ${result.newSuggestions?.aliases || 0} alias and ${result.newSuggestions?.garbage || 0} garbage suggestions`);
-      await loadConfig();
-      updateAllCounts();
-    } catch (error) {
-      showToast('Analyzer failed', 'error');
-    }
+  showSpinner('Analyzing tags...');
+  try {
+    const res = await fetch(`${API_BASE}/api/config/suggestions/analyze`, { method: 'POST' });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error || `HTTP ${res.status}`);
+
+    hideSpinner();
+    showToast(
+      `Analyzed: ${result.aliasGroups} alias groups, ` +
+      `${result.blacklistCandidates} blacklist candidates`
+    );
+
+    aliasSuggestionsPage = 0;
+    garbageSuggestionsPage = 0;
+    await renderSuggestions();
+    updateAllCounts();
+  } catch (err) {
+    hideSpinner();
+    showToast(`Analyze failed: ${err.message}`, 'error');
+  }
 }
 
 async function saveCurrentImage() {
@@ -324,16 +338,17 @@ async function showAutocompleteResults(input, dropdown, onSelect) {
       if (!results || results.length === 0) {
         dropdown.innerHTML = '<div class="autocomplete-item" style="color:var(--text-muted);">No matches found</div>';
       } else {
-        dropdown.innerHTML = results.map((tag, idx) => {
-          const tagStr = tag.tag || tag;
-          const { category, name } = parseTag(tagStr);
-          return `
-            <div class="autocomplete-item" data-tag="${escapeAttr(tagStr)}" data-index="${idx}">
-              <span class="tag-name">${escapeHtml(name)}</span>
-              <span class="category-badge category-${category}">${category}</span>
-            </div>
-          `;
-        }).join('');
+          dropdown.innerHTML = results.map((tag, idx) => {
+            const tagStr = tag.tag || tag;
+            const { category, name } = parseTag(tagStr);
+            const displayed = (name || '').replace(/_/g, ' ');
+            return `
+              <div class="autocomplete-item" data-tag="${escapeAttr(tagStr)}" data-index="${idx}">
+                <span class="tag-name">${escapeHtml(displayed)}</span>
+                <span class="category-badge category-${category}">${category}</span>
+              </div>
+            `;
+          }).join('');
 
         dropdown.querySelectorAll('.autocomplete-item[data-tag]').forEach(item => {
           item.onclick = () => {
@@ -355,6 +370,8 @@ async function showAutocompleteResults(input, dropdown, onSelect) {
     }
 }
 
+let currentUploadFilter = 'all';
+
 async function loadImages(reset = false) {
     if (imagesLoading) return;
     if (!imagesHasMore && !reset) return;
@@ -371,7 +388,7 @@ async function loadImages(reset = false) {
 
     try {
       // Add the sort parameter to the API call
-      const result = await apiCall(`/api/staging/images?limit=50&offset=${imagesOffset}&sort=${currentSort}`);
+      const result = await apiCall(`/api/staging/images?limit=50&offset=${imagesOffset}&sort=${currentSort}&upload=${currentUploadFilter}`);
       stagingImages = stagingImages.concat(result.images || []);
       imagesHasMore = result.hasMore ?? false;
       imagesOffset += (result.images || []).length;
@@ -388,6 +405,29 @@ async function loadImages(reset = false) {
 async function loadSidebarSingle(id) {
   try {
     currentImageData = await apiCall(`/api/staging/images/${encodeURIComponent(id)}`);
+
+    const fileUrl = `${API_BASE}/api/staging/image/${encodeURIComponent(id)}`;
+    const imgEl = document.getElementById('sidebar-image');
+    const videoEl = document.getElementById('sidebar-video');
+
+    if (currentImageData.mediaType === 'video') {
+      imgEl.style.display = 'none';
+      imgEl.removeAttribute('src');
+
+      videoEl.style.display = '';
+      videoEl.src = fileUrl;
+      videoEl.play().catch(() => {
+        // Autoplay blocked — that's fine, user can hit play
+      });
+    } else {
+      videoEl.style.display = 'none';
+      videoEl.pause();
+      videoEl.removeAttribute('src');
+      videoEl.load();   // releases the previous video resource
+
+      imgEl.style.display = '';
+      imgEl.src = fileUrl;
+    }
 
     document.getElementById('sidebar-image').src =
       `${API_BASE}/api/staging/image/${encodeURIComponent(id)}`;
@@ -620,4 +660,85 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const newPoolBtn = document.getElementById('sidebar-new-pool-btn');
   if (newPoolBtn) newPoolBtn.addEventListener('click', generatePoolId);
+
+  const wire = (id, fn, eventType = 'click') => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener(eventType, fn);
+  };
+
+  // --- Top dropdown menu ---
+  // --- Top dropdown ---
+  wire('dropdown-run-analyzer-btn',           runAnalyzer);
+
+  // Import (canonize-from-file)
+  wire('dropdown-import-aliases-btn',         () => canonizeConfigSection('aliases'));
+  wire('dropdown-import-hierarchy-btn',       () => canonizeConfigSection('hierarchy'));
+  wire('dropdown-import-exclusions-btn',      () => canonizeConfigSection('blacklist'));
+
+  // Export (download-as-JSON)
+  wire('dropdown-export-all-btn',             exportAllConfigs);
+  wire('dropdown-export-aliases-btn',         () => exportConfigSection('aliases'));
+  wire('dropdown-export-hierarchy-btn',       () => exportConfigSection('hierarchy'));
+  wire('dropdown-export-exclusions-btn',      () => exportConfigSection('blacklist'));
+
+  // Reload submenu
+  wire('dropdown-reload-btn',                 () => location.reload());
+  wire('dropdown-refresh-all-btn',            refreshAllImages);
+  wire('dropdown-rebuild-index-btn',          rebuildIndex);
+
+  // --- Images toolbar (kept) ---
+  wire('images-reload-btn',                   () => loadImages(true));
+
+  // --- Filter inputs ---
+  document.getElementById('aliases-filter')?.addEventListener('input', () => {
+    aliasesCurrentPage = 0;
+    renderAliases();
+  });
+
+  wire('upload-filter-container', () => {
+    const states = ['all', 'pending', 'uploaded'];
+    const titles = {
+      all:      'Showing all (click for pending only)',
+      pending:  'Showing pending uploads (click for uploaded only)',
+      uploaded: 'Showing uploaded only (click for all)'
+    };
+    currentUploadFilter = states[(states.indexOf(currentUploadFilter) + 1) % states.length];
+
+    const container = document.getElementById('upload-filter-container');
+    container.dataset.state = currentUploadFilter;
+    container.title = titles[currentUploadFilter];
+    container.classList.toggle('filter-active', currentUploadFilter !== 'all');
+
+    document.querySelectorAll('.upload-filter-icon').forEach(svg => {
+      svg.style.display = svg.dataset.state === currentUploadFilter ? '' : 'none';
+  });
+
+  loadImages(true);
+  });
+
+  wire('blacklist-filter',                    filterBlacklist,  'input');
+  wire('whitelist-filter',                    filterWhitelist,  'input');
+  wire('hierarchy-filter',                    filterHierarchy,  'input');
+
+  // --- Hierarchy toolbar ---
+  wire('hierarchy-expand-all-btn',            expandAllHierarchy);
+  wire('hierarchy-collapse-all-btn',          collapseAllHierarchy);
+
+  // --- Hierarchy modal ---
+  wire('hierarchy-modal-cancel-btn',          () => closeModal('hierarchy-modal'));
+
+  // --- Sidebar refresh + rescan ---
+  wire('sidebar-refresh-btn',                 refreshCurrentImage);
+  wire('sidebar-rescan-btn',                  rescanCurrentImage);
+
+  wire('alias-suggestions-prev-btn',        () => loadAliasSuggestions(aliasSuggestionsPage - 1));
+  wire('alias-suggestions-next-btn',        () => loadAliasSuggestions(aliasSuggestionsPage + 1));
+  wire('garbage-suggestions-prev-btn',      () => loadGarbageSuggestions(garbageSuggestionsPage - 1));
+  wire('garbage-suggestions-next-btn',      () => loadGarbageSuggestions(garbageSuggestionsPage + 1));
+
+  wire('aliases-prev-btn', () => window.aliasesPrevPage());
+  wire('aliases-next-btn', () => window.aliasesNextPage());
+
+  setupHierarchyDelegation();
+  setupSuggestionsDelegation();
 });

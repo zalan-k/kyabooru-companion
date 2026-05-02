@@ -334,13 +334,33 @@ function createOverlay(options = {}) {
   loadLastTagsButton.addEventListener('click', loadLastTagsOnly);
   loadLastIdButton.addEventListener('click', loadLastIdOnly);
   
-  generatePoolIdButton.addEventListener('click', () => {
-    // Generate a random string ID
-    const randomId = Math.random().toString(36).substring(2, 10);
-    poolIdInput.value = randomId;
+  generatePoolIdButton.addEventListener('click', async () => {
+    // Disable button during fetch to prevent double-clicks
+    generatePoolIdButton.disabled = true;
+    generatePoolIdButton.textContent = '...';
     
-    // When a new pool is created, default to index 0
-    poolIndexInput.value = '0';
+    try {
+      const response = await browser.runtime.sendMessage({ action: "generate-pool-id" });
+      if (response.success) {
+        poolIdInput.value = response.poolId;
+        // When a new pool is created, default to index 0
+        poolIndexInput.value = '0';
+        
+        if (response.source === 'client-fallback') {
+          console.warn('Pool ID generated client-side; server was unavailable.');
+        }
+      } else {
+        console.error('Pool generation failed:', response.error);
+      }
+    } catch (err) {
+      console.error('Pool generation error:', err);
+      // Last-resort fallback if even the message dispatch fails
+      poolIdInput.value = Math.random().toString(36).substring(2, 10);
+      poolIndexInput.value = '0';
+    } finally {
+      generatePoolIdButton.disabled = false;
+      generatePoolIdButton.textContent = 'Generate';
+    }
   });
 
   poolIdInput.addEventListener('change', async () => {

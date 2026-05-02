@@ -118,10 +118,18 @@ class BatchUploader {
     this.clearAllBtn.addEventListener('click', this.clearAll.bind(this));
   }
 
-  generatePoolId() {
-    // Generate a unique random pool ID and overwrite input
-    this.poolId = Math.random().toString(36).substring(2, 10);
-    this.poolHashInput.value = this.poolId;
+  async generatePoolId() {
+    try {
+      const res = await fetch(`${SERVER_URL}/api/pools/new`);
+      const data = await res.json();
+      this.poolId = data.poolId;
+      this.poolHashInput.value = this.poolId;
+    } catch (err) {
+      console.error('Failed to generate pool ID:', err);
+      // Fallback: client-side generation if server unreachable
+      this.poolId = Math.random().toString(36).substring(2, 10);
+      this.poolHashInput.value = this.poolId;
+    }
   }
 
   // Placeholder-specific drag handlers

@@ -15,6 +15,17 @@
     }
   };
 
+  // ============================================================
+  // Config — export / canonize buttons
+  // ============================================================
+
+  const CONFIG_TYPE_NAMES = {
+    aliases: 'Aliases',
+    hierarchy: 'Hierarchy',
+    blacklist: 'Blacklist',
+  };
+
+
   let stagingImages       = [];
   let selectedIds         = new Set();
   let lastClickedId       = null;
@@ -339,17 +350,6 @@
 
   });
 
-  function exportConfig() {
-    const exportData = {
-      aliases: config.aliases,
-      exclusions: config.exclusions,
-      hierarchy: config.hierarchy,
-      exportedAt: new Date().toISOString()
-    };
-    downloadJSON(exportData, 'kyabooru-config.json');
-    showToast('Config exported');
-  }
-
   function toggleDropdown(id) {
     const dropdown = document.getElementById(id);
     const wasHidden = dropdown.classList.contains('hidden');
@@ -367,69 +367,6 @@
         });
       }, 0);
     }
-  }
-
-  function importFullConfig() {
-    pickJSONFile(async (data) => {
-      if (data.aliases) config.aliases = data.aliases;
-      if (data.exclusions) config.exclusions = data.exclusions;
-      if (data.hierarchy) config.hierarchy = data.hierarchy;
-      
-      await Promise.all([
-        saveAliases(),
-        saveExclusions(), 
-        saveHierarchy()
-      ]);
-      
-      renderAliases();
-      renderExclusions();
-      renderHierarchy();
-      updateAllCounts();
-      showToast('Full config imported');
-    });
-  }
-
-  function importHierarchyOnly() {
-    pickJSONFile(async (data) => {
-      const hierarchyData = data.hierarchy || data;
-      const firstValue = Object.values(hierarchyData)[0];
-      if (firstValue && typeof firstValue === 'object' && 
-          (firstValue.hasOwnProperty('category') || firstValue.hasOwnProperty('implies'))) {
-        config.hierarchy = hierarchyData;
-        await saveHierarchy();
-        renderHierarchy();
-        updateAllCounts();
-        showToast(`Imported ${Object.keys(hierarchyData).length} hierarchy entries`);
-      } else {
-        showToast('Invalid hierarchy format', 'error');
-      }
-    });
-  }
-
-  function importAliasesOnly() {
-    pickJSONFile(async (data) => {
-      const aliasData = data.aliases || data;
-      config.aliases = aliasData;
-      await saveAliases();
-      renderAliases();
-      updateAllCounts();
-      showToast(`Imported ${Object.keys(aliasData).length} alias groups`);
-    });
-  }
-
-  function importExclusionsOnly() {
-    pickJSONFile(async (data) => {
-      const exclusionData = data.exclusions || data;
-      if (exclusionData.blacklist || exclusionData.whitelist) {
-        config.exclusions = exclusionData;
-        await saveExclusions();
-        renderExclusions();
-        updateAllCounts();
-        showToast('Exclusions imported');
-      } else {
-        showToast('Invalid exclusions format', 'error');
-      }
-    });
   }
 
   function pickJSONFile(callback) {
@@ -513,8 +450,7 @@ function renderImages(newImages) {
         href="${img.booruPublicUrl}"
         target="_blank"
         rel="noopener"
-        title="View on booru (post #${img.booruPostId})"
-        onclick="event.stopPropagation()">
+        title="View on booru (post #${img.booruPostId})">
         <svg class="booru-frost-icon" viewBox="0 0 24 24" fill="none"
             stroke="none" stroke-width="1.5"
             stroke-linecap="round" stroke-linejoin="round">
@@ -528,17 +464,25 @@ function renderImages(newImages) {
     card.innerHTML = `
       <img src="${API_BASE}/api/staging/thumbnail/${encodeURIComponent(img.id)}?size=200"
             alt="${escapeHtml(img.filename || '')}" loading="lazy"
-            onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%231a1a2e%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2255%22 text-anchor=%22middle%22 fill=%22%23666%22 font-size=%2212%22>No Image</text></svg>'">
+            class="card-thumb"
+            data-fallback="no-image">
       <span class="tag-count-badge">${img.tagCount || 0} tags</span>
       ${img.poolId ? '<span class="pool-badge">Pool</span>' : ''}
       ${booruOverlay}
     `;
 
     grid.appendChild(card);
+    const thumb = card.querySelector('.card-thumb');
+    if (thumb) {
+      thumb.addEventListener('error', () => {
+        thumb.src = 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%231a1a2e%22 width=%22100%22 height=%22100%22/><g transform=%22translate(30 30) scale(1.67)%22 fill=%22none%22 stroke=%22%23666%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><line x1=%222%22 y1=%222%22 x2=%2222%22 y2=%2222%22/><path d=%22M10.41 10.41a2 2 0 1 1-2.83-2.83%22/><line x1=%2213.5%22 y1=%2213.5%22 x2=%226%22 y2=%2221%22/><line x1=%2218%22 y1=%2212%22 x2=%2221%22 y2=%2215%22/><path d=%22M3.59 3.59A1.99 1.99 0 0 0 3 5v14a2 2 0 0 0 2 2h14c.55 0 1.052-.22 1.41-.59%22/><path d=%22M21 15V5a2 2 0 0 0-2-2H9%22/></g></svg>';
+      });
+    }
   });
 }
 
   function handleCardClick(id, event) {
+    if (event.target.closest('.booru-frost-icon-link')) return;
     if (event.shiftKey && lastClickedId) {
       // Range select from lastClickedId to id, in current grid order
       const cards = Array.from(document.querySelectorAll('.image-card'));
@@ -668,6 +612,14 @@ function renderImages(newImages) {
   }
 
   function closeSidebar() {
+    // Stop video playback if any
+    const videoEl = document.getElementById('sidebar-video');
+    if (videoEl) {
+      videoEl.pause();
+      videoEl.removeAttribute('src');
+      videoEl.load();
+    }
+
     document.getElementById('image-sidebar').classList.add('hidden');
     document.querySelectorAll('.image-card').forEach(c => c.classList.remove('selected'));
     currentImageId = null;
@@ -719,34 +671,289 @@ function renderImages(newImages) {
     renderSidebarTags();
   }
 
+  async function exportAllConfigs() {
+    try {
+      const [aliases, hierarchy, blacklist] = await Promise.all([
+        fetch(`${API_BASE}/api/config/aliases/export`).then(r => r.json()),
+        fetch(`${API_BASE}/api/config/hierarchy/export`).then(r => r.json()),
+        fetch(`${API_BASE}/api/config/blacklist/export`).then(r => r.json()),
+      ]);
+
+      const bundle = {
+        aliases: aliases.aliases,
+        hierarchy: hierarchy.hierarchy,
+        blacklist: blacklist.blacklist,
+        exportedAt: new Date().toISOString(),
+      };
+
+      const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'kyabooru-config.json';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(`Export failed: ${err.message}`);
+    }
+  }
+
+  async function exportConfigSection(type) {
+    if (!CONFIG_TYPE_NAMES[type]) {
+      console.error('Unknown config type:', type);
+      return;
+    }
+    try {
+      const res = await fetch(`${API_BASE}/api/config/${type}/export`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${type}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(`Export failed: ${err.message}`);
+    }
+  }
+
+  async function canonizeConfigSection(type) {
+    if (!CONFIG_TYPE_NAMES[type]) {
+      console.error('Unknown config type:', type);
+      return;
+    }
+
+    // Hidden file input — created on demand to avoid polluting HTML
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/json,.json';
+    input.onchange = async () => {
+      const file = input.files && input.files[0];
+      if (!file) return;
+      let body;
+      try {
+        const text = await file.text();
+        body = JSON.parse(text);
+      } catch (err) {
+        alert(`Invalid JSON: ${err.message}`);
+        return;
+      }
+
+      const name = CONFIG_TYPE_NAMES[type];
+      if (!confirm(
+        `Replace the current ${name} section with the contents of ${file.name}?\n\n` +
+        `This will overwrite all existing entries.`
+      )) {
+        return;
+      }
+
+      showSpinner(`Canonizing ${name.toLowerCase()}...`);
+      try {
+        const res = await fetch(`${API_BASE}/api/config/${type}/canonize`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const result = await res.json();
+        if (!res.ok) throw new Error(result.error || `HTTP ${res.status}`);
+
+        hideSpinner();
+        alert(`${name} canonized — loaded ${result.count} entries.`);
+
+        // Reload the relevant tab so the UI shows fresh data.
+        // Adapt this to whatever functions reload your panels:
+        await loadConfig();
+      } catch (err) {
+        hideSpinner();
+        alert(`Canonize failed: ${err.message}`);
+      }
+    };
+    input.click();
+  }
+
+  // ============================================================
+  // Per-image refresh + rescan (sidebar buttons)
+  // ============================================================
+
+  async function refreshCurrentImage() {
+    if (selectedIds.size !== 1) return;
+    const id = [...selectedIds][0];
+    if (!id) return;
+
+    showSpinner('Refreshing transformations...');
+    try {
+      const res = await fetch(`${API_BASE}/api/staging/images/${encodeURIComponent(id)}/refresh`, { method: 'POST' });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || `HTTP ${res.status}`);
+      hideSpinner();
+      if (result.changed) await loadSidebarSingle(id);
+    } catch (err) {
+      hideSpinner();
+      alert(`Refresh failed: ${err.message}`);
+    }
+  }
+
+  async function rescanCurrentImage() {
+    if (selectedIds.size !== 1) return;
+    const id = [...selectedIds][0];
+    if (!id) return;
+
+    showSpinner('Rescanning sidecar...');
+    try {
+      const res = await fetch(`${API_BASE}/api/staging/images/${encodeURIComponent(id)}/rescan`, { method: 'POST' });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || `HTTP ${res.status}`);
+      hideSpinner();
+
+      // Reload sidebar with fresh data
+      await loadSidebarSingle(id);
+    } catch (err) {
+      hideSpinner();
+      console.error('RESCAN:', err.name, err.message, err.stack, err);
+      alert(`Rescan failed: ${err.message}`);
+    }
+  }
+
+  // ============================================================
+  // Global refresh + rebuild (images toolbar buttons)
+  // ============================================================
+
+  async function refreshAllImages() {
+    if (!confirm(
+      'Refresh transformations on ALL images?\n\n' +
+      'This re-applies aliases, hierarchy, and blacklist to every staging ' +
+      'image. May take several minutes on large datasets.'
+    )) {
+      return;
+    }
+
+    showSpinner('Refreshing all images... this may take a while.');
+    try {
+      const res = await fetch(`${API_BASE}/api/staging/refresh-all`, { method: 'POST' });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || `HTTP ${res.status}`);
+      hideSpinner();
+
+      alert(
+        `Refresh complete.\n\n` +
+        `Total: ${result.total}\n` +
+        `Changed: ${result.changed}\n` +
+        `Unchanged: ${result.unchanged}\n` +
+        `Errored: ${result.errored}\n` +
+        `Elapsed: ${(result.elapsed / 1000).toFixed(1)}s`
+      );
+
+      // Reload the grid since some images may have moved sort positions
+      await loadImages(true);
+    } catch (err) {
+      hideSpinner();
+      alert(`Refresh-all failed: ${err.message}`);
+    }
+  }
+
+  async function rebuildIndex() {
+    if (!confirm(
+      'Rebuild staging index from disk?\n\n' +
+      'This wipes the database index and re-reads every sidecar JSON. ' +
+      'Use this after editing sidecars externally or if the index seems out of sync. ' +
+      'May take several minutes on large datasets.'
+    )) {
+      return;
+    }
+
+    showSpinner('Rebuilding index... this may take a while.');
+    try {
+      const res = await fetch(`${API_BASE}/api/staging/rebuild`, { method: 'POST' });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || `HTTP ${res.status}`);
+      hideSpinner();
+
+      alert(
+        `Rebuild complete.\n\n` +
+        `Inserted: ${result.inserted}\n` +
+        `Errored: ${result.errored}\n` +
+        `Elapsed: ${(result.elapsed / 1000).toFixed(1)}s`
+      );
+
+      await loadImages(true);
+    } catch (err) {
+      hideSpinner();
+      alert(`Rebuild failed: ${err.message}`);
+    }
+  }
+
+  // ============================================================
+  // Spinner helpers
+  // ============================================================
+  //
+  // If your UI already has a global spinner / overlay, replace these
+  // with your existing functions. Otherwise this creates a minimal one.
+
+  function showSpinner(message) {
+    let overlay = document.getElementById('global-spinner-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'global-spinner-overlay';
+      overlay.innerHTML = `
+        <div class="spinner-box">
+          <div class="spinner-circle"></div>
+          <div class="spinner-message"></div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+    }
+    overlay.querySelector('.spinner-message').textContent = message || 'Working...';
+    overlay.style.display = 'flex';
+  }
+
+  function hideSpinner() {
+    const overlay = document.getElementById('global-spinner-overlay');
+    if (overlay) overlay.style.display = 'none';
+  }
+
   // ============================================
   // ALIASES TAB
   // ============================================
+  const ALIASES_PAGE_SIZE = 50;
+  let aliasesCurrentPage = 0;
   function renderAliases() {
     const container = document.getElementById('aliases-list');
     const emptyState = document.getElementById('aliases-empty');
+    const filter = document.getElementById('aliases-filter')?.value.toLowerCase() || '';
+    
     container.innerHTML = '';
 
-    let aliases = Object.entries(config.aliases || {});
-    
-    // Apply filter
-    if (aliasesFilter) {
-      const filter = aliasesFilter.toLowerCase();
-      aliases = aliases.filter(([canonical, data]) => {
-        if (canonical.toLowerCase().includes(filter)) return true;
-        if (data.variants?.some(v => v.toLowerCase().includes(filter))) return true;
-        return false;
+    let aliasEntries = Object.entries(config.aliases || {});
+
+    if (filter) {
+      aliasEntries = aliasEntries.filter(([canonical, data]) => {
+        const canonicalMatch = canonical.toLowerCase().includes(filter);
+        const variantMatch = (data.variants || []).some(v => v.toLowerCase().includes(filter));
+        return canonicalMatch || variantMatch;
       });
     }
 
-    if (aliases.length === 0 && !aliasesFilter) {
+    if (aliasEntries.length === 0) {
       emptyState.style.display = 'block';
+      document.getElementById('aliases-pager')?.style.setProperty('display', 'none');
       return;
     }
 
     emptyState.style.display = 'none';
-
-    aliases.forEach(([canonicalKey, data]) => {
+    // Paginate
+    const totalPages = Math.ceil(aliasEntries.length / ALIASES_PAGE_SIZE);
+    if (aliasesCurrentPage >= totalPages) aliasesCurrentPage = Math.max(0, totalPages - 1);
+    const start = aliasesCurrentPage * ALIASES_PAGE_SIZE;
+    const pageEntries = aliasEntries.slice(start, start + ALIASES_PAGE_SIZE);
+    
+    pageEntries.forEach(([canonicalKey, data]) => {
       const { category: canonicalCat, name: canonicalName } = parseTag(canonicalKey);
       const effectiveCategory = data.category || canonicalCat || 'general';
       
@@ -818,6 +1025,27 @@ function renderImages(newImages) {
         });
       }
     });
+    // Update pagination controls
+    updateAliasesPager(aliasEntries.length, totalPages);
+  }
+
+  function updateAliasesPager(totalCount, totalPages) {
+    const pager = document.getElementById('aliases-pager');
+    if (!pager) return;
+    
+    if (totalPages <= 1) {
+      pager.style.display = 'none';
+      return;
+    }
+    
+    pager.style.display = '';
+    const info = document.getElementById('aliases-page-info');
+    if (info) info.textContent = `Page ${aliasesCurrentPage + 1} of ${totalPages} (${totalCount} aliases)`;
+    
+    const prev = document.getElementById('aliases-prev-btn');
+    const next = document.getElementById('aliases-next-btn');
+    if (prev) prev.disabled = aliasesCurrentPage <= 0;
+    if (next) next.disabled = aliasesCurrentPage >= totalPages - 1;
   }
 
   function filterAliases() {
@@ -825,102 +1053,246 @@ function renderImages(newImages) {
     renderAliases();
   }
 
-  function renderSuggestions() {
-    // Alias suggestions
-    const aliasSection = document.getElementById('alias-suggestions-section');
-    const aliasSuggestions = config.suggestions?.aliases || [];
-    
-    if (aliasSuggestions.length > 0) {
-      aliasSection.style.display = 'block';
-      document.getElementById('alias-suggestions').innerHTML = aliasSuggestions.map((s, idx) => `
-        <div class="card suggestion">
+// ============================================================
+  // SUGGESTIONS — backed by /api/config/suggestions/* endpoints
+  // ============================================================
+
+  const SUGGESTIONS_PAGE_SIZE = 25;
+  let aliasSuggestionsPage = 0;
+  let garbageSuggestionsPage = 0;
+
+  /**
+   * Initial render — called once on tab open. Hides sections until
+   * the user clicks Analyze. (Suggestions persist in DB across
+   * sessions, so on a fresh load we still need to fetch and display
+   * any existing pending suggestions.)
+   */
+  async function renderSuggestions() {
+    await Promise.all([
+      loadAliasSuggestions(0),
+      loadGarbageSuggestions(0),
+    ]);
+  }
+
+  async function loadAliasSuggestions(page = 0) {
+    const offset = page * SUGGESTIONS_PAGE_SIZE;
+    let data;
+    try {
+      const res = await fetch(`${API_BASE}/api/config/suggestions/aliases?limit=${SUGGESTIONS_PAGE_SIZE}&offset=${offset}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      data = await res.json();
+    } catch (err) {
+      // Endpoint missing or error — hide section silently. Don't
+      // alert; user might not be using suggester at all.
+      document.getElementById('alias-suggestions-section').style.display = 'none';
+      return;
+    }
+
+    aliasSuggestionsPage = page;
+    const section = document.getElementById('alias-suggestions-section');
+    const list    = document.getElementById('alias-suggestions');
+    const meta    = document.getElementById('alias-suggestions-meta');
+
+    if (!data.groups || data.groups.length === 0) {
+      // Nothing pending — keep the panel visible if total > 0
+      // (means user has cleared the pending set), or hide if total
+      // is zero (never analyzed or fully resolved).
+      if (data.total === 0) {
+        section.style.display = 'none';
+      } else {
+        section.style.display = '';
+        list.innerHTML = `<div class="suggestions-empty">All caught up — no pending alias suggestions.</div>`;
+        meta.textContent = `${data.total} groups`;
+      }
+      document.getElementById('alias-suggestions-pager').style.display = 'none';
+      return;
+    }
+
+    section.style.display = '';
+    if (meta) meta.textContent = `${data.total} groups total`;
+
+    list.innerHTML = data.groups.map((g, idx) => {
+      const { category: canCategory, name: canName } = parseTag(g.canonical);
+      return `
+        <div class="card suggestion" data-canonical="${escapeAttr(g.canonical)}">
           <div class="card-header">
             <div>
-              <div class="card-title">${escapeHtml(s.canonical)}</div>
-              <div class="card-meta">${s.variants?.length || 0} variants · ${Math.round((s.confidence || 0) * 100)}% confidence</div>
+              <div class="card-title">
+                <span class="tag-pill tag-${canCategory}">${escapeHtml(canName.replace(/_/g, ' '))}</span>
+              </div>
+              <div class="card-meta">${g.sources.length} variant${g.sources.length === 1 ? '' : 's'} · ${g.group_count} total uses</div>
             </div>
             <div class="card-actions">
-              <button class="btn btn-small btn-success" onclick="acceptAliasSuggestion(${idx})">Accept</button>
-              <button class="btn btn-small btn-ghost" onclick="dismissAliasSuggestion(${idx})">Dismiss</button>
+              <button class="btn btn-small btn-success" data-suggestion-action="accept-alias-all">Accept All</button>
+              <button class="btn btn-small btn-ghost" data-suggestion-action="dismiss-alias-all">Dismiss All</button>
             </div>
           </div>
-          <div class="alias-variants-list">
-            ${(s.variants || []).map(v => {
-              const { category, name } = parseTag(v);
-              return `<span class="tag-pill tag-${category}">${escapeHtml(name)}</span>`;
+          <div class="suggestion-variants-list">
+            ${g.sources.map(s => {
+              const { category, name } = parseTag(s.source);
+              return `
+                 <div class="suggestion-variant-row" data-source="${escapeAttr(s.source)}">
+                  <span class="tag-pill tag-${category}">${escapeHtml(name.replace(/_/g, ' '))}</span>
+                  <span class="alias-variant-count">${s.count}</span>
+                  <button class="btn btn-small btn-success" data-suggestion-action="accept-alias-one">✓</button>
+                  <button class="btn btn-small btn-ghost"   data-suggestion-action="dismiss-alias-one">✕</button>
+                </div>
+              `;
             }).join('')}
           </div>
         </div>
-      `).join('');
+      `;
+    }).join('');
+
+    // Pagination controls
+    const pager = document.getElementById('alias-suggestions-pager');
+    const totalPages = Math.ceil(data.total / SUGGESTIONS_PAGE_SIZE);
+    if (totalPages > 1) {
+      pager.style.display = '';
+      document.getElementById('alias-suggestions-page-info').textContent =
+        `Page ${page + 1} of ${totalPages}`;
+      document.getElementById('alias-suggestions-prev-btn').disabled = page <= 0;
+      document.getElementById('alias-suggestions-next-btn').disabled = page >= totalPages - 1;
     } else {
-      aliasSection.style.display = 'none';
+      pager.style.display = 'none';
+    }
+  }
+
+  async function loadGarbageSuggestions(page = 0) {
+    const offset = page * SUGGESTIONS_PAGE_SIZE;
+    let data;
+    try {
+      const res = await fetch(`${API_BASE}/api/config/suggestions/blacklist?limit=${SUGGESTIONS_PAGE_SIZE}&offset=${offset}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      data = await res.json();
+    } catch {
+      document.getElementById('garbage-suggestions-section').style.display = 'none';
+      return;
     }
 
-    // Garbage suggestions
-    const garbageSection = document.getElementById('garbage-suggestions-section');
-    const garbageSuggestions = config.suggestions?.garbage || [];
+    garbageSuggestionsPage = page;
+    const section = document.getElementById('garbage-suggestions-section');
+    const list    = document.getElementById('garbage-suggestions');
+    const meta    = document.getElementById('garbage-suggestions-meta');
 
-    if (garbageSuggestions.length > 0) {
-      garbageSection.style.display = 'block';
-      document.getElementById('garbage-suggestions').innerHTML = garbageSuggestions.map((s, idx) => {
-        const { category, name } = parseTag(s.tag);
-        return `
-          <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
-            <span class="tag-pill tag-${category}">${escapeHtml(name)}</span>
-            <span style="color:var(--text-muted); font-size:11px;">${escapeHtml(s.reason || '')}</span>
-            <div style="margin-left:auto; display:flex; gap:6px;">
-              <button class="btn btn-small btn-danger" onclick="acceptGarbageSuggestion(${idx})">Blacklist</button>
-              <button class="btn btn-small btn-ghost" onclick="dismissGarbageSuggestion(${idx})">Dismiss</button>
-            </div>
+    if (!data.items || data.items.length === 0) {
+      if (data.total === 0) {
+        section.style.display = 'none';
+      } else {
+        section.style.display = '';
+        list.innerHTML = `<div class="suggestions-empty">All caught up — no pending blacklist suggestions.</div>`;
+        if (meta) meta.textContent = `${data.total} candidates`;
+      }
+      document.getElementById('garbage-suggestions-pager').style.display = 'none';
+      return;
+    }
+
+    section.style.display = '';
+    if (meta) meta.textContent = `${data.total} candidates total`;
+
+    list.innerHTML = data.items.map(item => {
+      const { category, name } = parseTag(item.tag);
+      const reasonLabel = item.reason === 'non-ascii' ? 'non-ASCII'
+                       : item.reason === 'low-count'  ? `low usage (${item.post_count})`
+                       : item.reason;
+      return `
+        <div class="garbage-row" data-tag="${escapeAttr(item.tag)}">
+          <span class="tag-pill tag-${category}">${escapeHtml(name.replace(/_/g, ' '))}</span>
+          <span class="garbage-reason">${escapeHtml(reasonLabel)}</span>
+          <div class="garbage-actions">
+            <button class="btn btn-small btn-danger" data-suggestion-action="accept-garbage">Blacklist</button>
+            <button class="btn btn-small btn-ghost"  data-suggestion-action="dismiss-garbage">Dismiss</button>
           </div>
-        `;
-      }).join('');
+        </div>
+      `;
+    }).join('');
+
+    const pager = document.getElementById('garbage-suggestions-pager');
+    const totalPages = Math.ceil(data.total / SUGGESTIONS_PAGE_SIZE);
+    if (totalPages > 1) {
+      pager.style.display = '';
+      document.getElementById('garbage-suggestions-page-info').textContent =
+        `Page ${page + 1} of ${totalPages}`;
+      document.getElementById('garbage-suggestions-prev-btn').disabled = page <= 0;
+      document.getElementById('garbage-suggestions-next-btn').disabled = page >= totalPages - 1;
     } else {
-      garbageSection.style.display = 'none';
+      pager.style.display = 'none';
     }
   }
 
-  function acceptAliasSuggestion(idx) {
-    const suggestion = config.suggestions.aliases[idx];
-    if (!suggestion) return;
+  // ============================================================
+  // Accept / dismiss actions
+  // ============================================================
 
-    const normalizedCanonical = normalizeTagName(suggestion.canonical);
-    const { category } = parseTag(suggestion.canonical);
-    config.aliases[normalizedCanonical] = {
-      category: suggestion.category || category || 'general',
-      variants: suggestion.variants || []
-    };
-    config.suggestions.aliases.splice(idx, 1);
+  async function acceptAliasGroup(canonical, sources) {
+    try {
+      const res = await fetch(`${API_BASE}/api/config/suggestions/aliases/accept`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ canonical, sources }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || `HTTP ${res.status}`);
 
-    saveAliases();
-    renderAliases();
-    renderSuggestions();
-  }
-
-  function dismissAliasSuggestion(idx) {
-    config.suggestions.aliases.splice(idx, 1);
-    renderSuggestions();
-    updateAllCounts();
-  }
-
-  function acceptGarbageSuggestion(idx) {
-    const suggestion = config.suggestions.garbage[idx];
-    if (!suggestion) return;
-
-    if (!config.exclusions.blacklist.includes(suggestion.tag)) {
-      config.exclusions.blacklist.push(suggestion.tag);
+      showToast(`Accepted ${result.count} alias${result.count === 1 ? '' : 'es'}`);
+      // Reload both the aliases panel AND the suggestions panel
+      await loadConfig();
+      await loadAliasSuggestions(aliasSuggestionsPage);
+    } catch (err) {
+      showToast(`Accept failed: ${err.message}`, 'error');
     }
-    config.suggestions.garbage.splice(idx, 1);
-
-    saveExclusions();
-    renderExclusions();
-    renderSuggestions();
   }
 
-  function dismissGarbageSuggestion(idx) {
-    config.suggestions.garbage.splice(idx, 1);
-    renderSuggestions();
-    updateAllCounts();
+  async function dismissAliasGroup(canonical, sources) {
+    try {
+      const res = await fetch(`${API_BASE}/api/config/suggestions/aliases/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ canonical, sources }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || `HTTP ${res.status}`);
+
+      showToast(`Dismissed ${result.count} suggestion${result.count === 1 ? '' : 's'}`);
+      await loadAliasSuggestions(aliasSuggestionsPage);
+    } catch (err) {
+      showToast(`Dismiss failed: ${err.message}`, 'error');
+    }
+  }
+
+  async function acceptGarbageTag(tag) {
+    try {
+      const res = await fetch(`${API_BASE}/api/config/suggestions/blacklist/accept`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tags: [tag] }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || `HTTP ${res.status}`);
+
+      showToast(`Blacklisted ${tag}`);
+      await loadConfig();
+      await loadGarbageSuggestions(garbageSuggestionsPage);
+    } catch (err) {
+      showToast(`Blacklist failed: ${err.message}`, 'error');
+    }
+  }
+
+  async function dismissGarbageTag(tag) {
+    try {
+      const res = await fetch(`${API_BASE}/api/config/suggestions/blacklist/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tags: [tag] }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || `HTTP ${res.status}`);
+
+      showToast(`Dismissed ${tag}`);
+      await loadGarbageSuggestions(garbageSuggestionsPage);
+    } catch (err) {
+      showToast(`Dismiss failed: ${err.message}`, 'error');
+    }
   }
 
   function addAliasFromInput() {
@@ -1231,20 +1603,23 @@ function renderImages(newImages) {
     emptyState.style.display = 'none';
 
     // Build tree structure
-    const rootTags = [];
     const childrenMap = {};
+    const parentsOf = {};
+    const allTags = new Set();
 
-    hierarchyEntries.forEach(([tag, data]) => {
-      const implies = data.implies || [];
-      if (implies.length === 0) {
-        rootTags.push(tag);
-      } else {
-        implies.forEach(parent => {
-          if (!childrenMap[parent]) childrenMap[parent] = [];
-          childrenMap[parent].push(tag);
-        });
+    for (const [parent, children] of hierarchyEntries) {
+      allTags.add(parent);
+      if (!childrenMap[parent]) childrenMap[parent] = [];
+      for (const child of children) {
+        allTags.add(child);
+        childrenMap[parent].push(child);
+        if (!parentsOf[child]) parentsOf[child] = [];
+        parentsOf[child].push(parent);
       }
-    });
+    }
+
+    const rootTags = [...allTags].filter(t => !parentsOf[t] || parentsOf[t].length === 0);
+    rootTags.sort();
 
     // Filter check
     const matchesFilter = (tag) => {
@@ -1260,7 +1635,7 @@ function renderImages(newImages) {
 
     // Render tree recursively
     function renderNode(tag, depth = 0) {
-      const data = config.hierarchy[tag] || {};
+      const { category } = parseTag(tag);
       const children = (childrenMap[tag] || []).filter(c => hasMatchingDescendant(c));
       const hasChildren = children.length > 0;
       const isCollapsed = collapsedNodes.has(tag);
@@ -1268,35 +1643,67 @@ function renderImages(newImages) {
 
       const nodeEl = document.createElement('div');
       nodeEl.style.opacity = matches ? '1' : '0.5';
-      
-      nodeEl.innerHTML = `
-        <div class="hierarchy-node" 
-              draggable="true"
-              ondragstart="handleDragStart(event, '${escapeAttr(tag)}')"
-              ondragover="handleDragOver(event)"
-              ondragleave="handleDragLeave(event)"
-              ondrop="handleDrop(event, '${escapeAttr(tag)}')">
-          <span class="hierarchy-toggle ${isCollapsed ? 'collapsed' : ''} ${!hasChildren ? 'no-children' : ''}"
-                onclick="toggleHierarchyNode('${escapeAttr(tag)}')">▼</span>
-          <span class="category-badge category-${data.category || 'general'}" 
-                onclick="showHierarchyCategoryDropdown(event, '${escapeAttr(tag)}')">${data.category || 'general'}</span>
-          <span class="hierarchy-node-name" onclick="startHierarchyTagEdit(event, '${escapeAttr(tag)}')">${escapeHtml(tag)}</span>
-          <div class="hierarchy-node-actions">
-            <button onclick="addHierarchyChild('${escapeAttr(tag)}')">+ Child</button>
-            <button onclick="addHierarchyParent('${escapeAttr(tag)}')">+ Parent</button>
-            <button onclick="removeHierarchyNode('${escapeAttr(tag)}')">×</button>
-          </div>
-        </div>
-        <div class="hierarchy-children ${isCollapsed ? 'collapsed' : ''}" id="children-${escapeAttr(tag)}"></div>
-      `;
+
+      // ── Row ────────────────────────────────────────────────────────────
+      const nodeDiv = document.createElement('div');
+      nodeDiv.className = 'hierarchy-node';
+      nodeDiv.draggable = true;
+      nodeDiv.addEventListener('dragstart', (e) => handleDragStart(e, tag));
+      nodeDiv.addEventListener('dragover',  handleDragOver);
+      nodeDiv.addEventListener('dragleave', handleDragLeave);
+      nodeDiv.addEventListener('drop',      (e) => handleDrop(e, tag));
+
+      // Toggle arrow
+      const toggle = document.createElement('span');
+      toggle.className = [
+        'hierarchy-toggle',
+        isCollapsed   ? 'collapsed'    : '',
+        !hasChildren  ? 'no-children'  : '',
+      ].join(' ').trim();
+      toggle.textContent = '▼';
+      toggle.addEventListener('click', () => toggleHierarchyNode(tag));
+      nodeDiv.appendChild(toggle);
+
+      // Category badge
+      const catBadge = document.createElement('span');
+      catBadge.className = `category-badge category-${category}`;
+      catBadge.textContent = category;
+      nodeDiv.appendChild(catBadge);
+
+      // Tag name
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'hierarchy-node-name';
+      nameSpan.textContent = tag;
+      nameSpan.addEventListener('click', (e) => startHierarchyTagEdit(e, tag));
+      nodeDiv.appendChild(nameSpan);
+
+      // Action buttons
+      const actions = document.createElement('div');
+      actions.className = 'hierarchy-node-actions';
+
+      const mkBtn = (label, handler) => {
+        const btn = document.createElement('button');
+        btn.textContent = label;
+        btn.addEventListener('click', (e) => { e.stopPropagation(); handler(); });
+        return btn;
+      };
+
+      actions.appendChild(mkBtn('+ Child',  () => addHierarchyChild(tag)));
+      actions.appendChild(mkBtn('+ Parent', () => addHierarchyParent(tag)));
+      actions.appendChild(mkBtn('×',        () => removeHierarchyNode(tag)));
+      nodeDiv.appendChild(actions);
+      nodeEl.appendChild(nodeDiv);
+
+      // ── Children container ─────────────────────────────────────────────
+      const childrenDiv = document.createElement('div');
+      childrenDiv.className = 'hierarchy-children' + (isCollapsed ? ' collapsed' : '');
+      childrenDiv.id = `children-${tag}`;
 
       if (hasChildren) {
-        const childrenContainer = nodeEl.querySelector('.hierarchy-children');
-        children.sort().forEach(child => {
-          childrenContainer.appendChild(renderNode(child, depth + 1));
-        });
+        children.sort().forEach(child => childrenDiv.appendChild(renderNode(child, depth + 1)));
       }
 
+      nodeEl.appendChild(childrenDiv);
       return nodeEl;
     }
 
@@ -1358,24 +1765,13 @@ function renderImages(newImages) {
     config.hierarchy[newTag] = config.hierarchy[oldTag];
     delete config.hierarchy[oldTag];
     
-    // Update any children that reference this tag
-    Object.values(config.hierarchy).forEach(data => {
-      if (data.implies) {
-        data.implies = data.implies.map(i => i === oldTag ? newTag : i);
-      }
-    });
+    // Update any child references in OTHER entries
+    for (const [p, children] of Object.entries(config.hierarchy)) {
+      config.hierarchy[p] = children.map(c => c === oldTag ? newTag : c);
+    }
     
     saveHierarchy();
     renderHierarchy();
-  }
-
-  function showHierarchyCategoryDropdown(event, tag) {
-    event.stopPropagation();
-    showCategoryDropdown(event.target, (newCategory) => {
-      config.hierarchy[tag].category = newCategory;
-      saveHierarchy();
-      renderHierarchy();
-    });
   }
 
   function toggleHierarchyNode(tag) {
@@ -1399,27 +1795,28 @@ function renderImages(newImages) {
 
   function addRootTag() {
     const rawInput = document.getElementById('new-hierarchy-tag').value.trim();
-    
+
     if (!rawInput) {
       showToast('Enter a tag name', 'error');
       return;
     }
-    
-    // Parse category:tag format
+
     const { category, name } = parseTag(rawInput);
-    const tag = normalizeTagName(name);
-    
-    if (!tag) {
+    const tagName = normalizeTagName(name);
+
+    if (!tagName) {
       showToast('Enter a valid tag name', 'error');
       return;
     }
+
+    const tag = `${category}:${tagName}`;
 
     if (config.hierarchy[tag]) {
       showToast('Tag already in hierarchy', 'error');
       return;
     }
 
-    config.hierarchy[tag] = { category, implies: [] };
+    config.hierarchy[tag] = [];
     saveHierarchy();
     renderHierarchy();
     document.getElementById('new-hierarchy-tag').value = '';
@@ -1428,39 +1825,33 @@ function renderImages(newImages) {
   function addHierarchyChild(parentTag) {
     document.getElementById('hierarchy-modal-title').textContent = `Add Child Under "${parentTag}"`;
     document.getElementById('hierarchy-modal-tag').value = '';
-    
-    // Pre-fill with parent's category as hint
-    const parentCategory = config.hierarchy[parentTag]?.category || 'general';
+
+    const parentCategory = parseTag(parentTag).category;
     document.getElementById('hierarchy-modal-tag').placeholder = `e.g. ${parentCategory}:tag_name`;
 
     const submitBtn = document.getElementById('hierarchy-modal-submit');
     submitBtn.textContent = 'Add Child';
     submitBtn.onclick = () => {
       const rawInput = document.getElementById('hierarchy-modal-tag').value.trim();
+      if (!rawInput) { showToast('Enter a tag name', 'error'); return; }
 
-      if (!rawInput) {
-        showToast('Enter a tag name', 'error');
-        return;
-      }
-      
-      // Parse category:tag format, default to parent's category if not specified
       let { category, name } = parseTag(rawInput);
-      const tag = normalizeTagName(name);
-      
-      // If no category was specified (parseTag returns 'general' for no prefix), 
-      // inherit from parent
-      if (!rawInput.includes(':')) {
-        category = parentCategory;
-      }
+      const tagName = normalizeTagName(name);
+      if (!tagName) { showToast('Enter a valid tag name', 'error'); return; }
 
-      if (!tag) {
-        showToast('Enter a valid tag name', 'error');
-        return;
-      }
+      if (!rawInput.includes(':')) category = parentCategory;
+      const childTag = `${category}:${tagName}`;
 
-      config.hierarchy[tag] = { category, implies: [parentTag] };
+      // Add edge: parent → child
+      if (!config.hierarchy[parentTag]) config.hierarchy[parentTag] = [];
+      if (!config.hierarchy[parentTag].includes(childTag)) {
+        config.hierarchy[parentTag].push(childTag);
+      }
+      // Make sure the child key exists too (with empty children) so it
+      // shows up in render even if it's a leaf
+      if (!config.hierarchy[childTag]) config.hierarchy[childTag] = [];
+
       collapsedNodes.delete(parentTag);
-
       saveHierarchy();
       renderHierarchy();
       closeModal('hierarchy-modal');
@@ -1472,40 +1863,28 @@ function renderImages(newImages) {
   function addHierarchyParent(childTag) {
     document.getElementById('hierarchy-modal-title').textContent = `Add Parent Above "${childTag}"`;
     document.getElementById('hierarchy-modal-tag').value = '';
-    
-    // Pre-fill with child's category as hint
-    const childCategory = config.hierarchy[childTag]?.category || 'general';
+
+    const childCategory = parseTag(childTag).category;
     document.getElementById('hierarchy-modal-tag').placeholder = `e.g. ${childCategory}:tag_name`;
 
     const submitBtn = document.getElementById('hierarchy-modal-submit');
     submitBtn.textContent = 'Add Parent';
     submitBtn.onclick = () => {
       const rawInput = document.getElementById('hierarchy-modal-tag').value.trim();
+      if (!rawInput) { showToast('Enter a tag name', 'error'); return; }
 
-      if (!rawInput) {
-        showToast('Enter a tag name', 'error');
-        return;
-      }
-      
-      // Parse category:tag format, default to child's category if not specified
       let { category, name } = parseTag(rawInput);
-      const newParentTag = normalizeTagName(name);
-      
-      // If no category was specified, inherit from child
-      if (!rawInput.includes(':')) {
-        category = childCategory;
+      const parentName = normalizeTagName(name);
+      if (!parentName) { showToast('Enter a valid tag name', 'error'); return; }
+
+      if (!rawInput.includes(':')) category = childCategory;
+      const newParentTag = `${category}:${parentName}`;
+
+      if (!config.hierarchy[newParentTag]) config.hierarchy[newParentTag] = [];
+      if (!config.hierarchy[newParentTag].includes(childTag)) {
+        config.hierarchy[newParentTag].push(childTag);
       }
-
-      if (!newParentTag) {
-        showToast('Enter a valid tag name', 'error');
-        return;
-      }
-
-      const childData = config.hierarchy[childTag];
-      const oldParents = childData?.implies || [];
-
-      config.hierarchy[newParentTag] = { category, implies: [...oldParents] };
-      config.hierarchy[childTag].implies = [newParentTag];
+      if (!config.hierarchy[childTag]) config.hierarchy[childTag] = [];
 
       saveHierarchy();
       renderHierarchy();
@@ -1518,18 +1897,136 @@ function renderImages(newImages) {
   function removeHierarchyNode(tag) {
     if (!confirm(`Remove "${tag}" from hierarchy?`)) return;
 
-    const data = config.hierarchy[tag];
-    const parents = data?.implies || [];
+    // What were tag's parents? (Need to know to potentially reparent
+    // tag's children to them.)
+    const parents = [];
+    for (const [p, children] of Object.entries(config.hierarchy)) {
+      if (children.includes(tag)) parents.push(p);
+    }
 
-    Object.entries(config.hierarchy).forEach(([t, d]) => {
-      if (d.implies && d.implies.includes(tag)) {
-        d.implies = [...new Set(d.implies.filter(i => i !== tag).concat(parents))];
+    // What were tag's children?
+    const children = config.hierarchy[tag] || [];
+
+    // Reparent: every child of tag becomes a child of every parent of tag.
+    for (const parent of parents) {
+      config.hierarchy[parent] = config.hierarchy[parent].filter(c => c !== tag);
+      for (const child of children) {
+        if (!config.hierarchy[parent].includes(child)) {
+          config.hierarchy[parent].push(child);
+        }
+      }
+    }
+
+    // Remove tag's own entry
+    delete config.hierarchy[tag];
+
+    // Clean up: if any other entry still mentions tag as a child, drop
+    // the reference (defensive — shouldn't happen but cheap)
+    for (const [p, kids] of Object.entries(config.hierarchy)) {
+      config.hierarchy[p] = kids.filter(c => c !== tag);
+    }
+
+    saveHierarchy();
+    renderHierarchy();
+  }
+
+  function setupSuggestionsDelegation() {
+    // Aliases section
+    const aliasContainer = document.getElementById('alias-suggestions-section');
+    if (aliasContainer) {
+      aliasContainer.addEventListener('click', async (event) => {
+        const target = event.target.closest('[data-suggestion-action]');
+        if (!target) return;
+
+        const action = target.dataset.suggestionAction;
+        const card = target.closest('.card.suggestion');
+        const canonical = card?.dataset.canonical;
+        if (!canonical) return;
+
+        if (action === 'accept-alias-all') {
+          const sources = [...card.querySelectorAll('.suggestion-variant-row')]
+            .map(row => row.dataset.source);
+          if (sources.length > 0) await acceptAliasGroup(canonical, sources);
+        } else if (action === 'dismiss-alias-all') {
+          const sources = [...card.querySelectorAll('.suggestion-variant-row')]
+            .map(row => row.dataset.source);
+          if (sources.length > 0) await dismissAliasGroup(canonical, sources);
+        } else if (action === 'accept-alias-one') {
+          const row = target.closest('.suggestion-variant-row');
+          const source = row?.dataset.source;
+          if (source) await acceptAliasGroup(canonical, [source]);
+        } else if (action === 'dismiss-alias-one') {
+          const row = target.closest('.suggestion-variant-row');
+          const source = row?.dataset.source;
+          if (source) await dismissAliasGroup(canonical, [source]);
+        }
+      });
+    }
+
+    // Blacklist section
+    const garbageContainer = document.getElementById('garbage-suggestions-section');
+    if (garbageContainer) {
+      garbageContainer.addEventListener('click', async (event) => {
+        const target = event.target.closest('[data-suggestion-action]');
+        if (!target) return;
+
+        const action = target.dataset.suggestionAction;
+        const row = target.closest('.garbage-row');
+        const tag = row?.dataset.tag;
+        if (!tag) return;
+
+        if (action === 'accept-garbage')      await acceptGarbageTag(tag);
+        else if (action === 'dismiss-garbage') await dismissGarbageTag(tag);
+      });
+    }
+  }
+
+  function setupHierarchyDelegation() {
+    const container = document.getElementById('hierarchy-tree');
+    if (!container) return;
+
+    // Click delegation
+    container.addEventListener('click', (event) => {
+      const target = event.target.closest('[data-action]');
+      if (!target) return;
+
+      const action = target.dataset.action;
+      const node = target.closest('.hierarchy-node');
+      const tag = node?.dataset.tag;
+      if (!tag) return;
+
+      switch (action) {
+        case 'toggle':            toggleHierarchyNode(tag); break;
+        case 'edit-name':         startHierarchyTagEdit(event, tag); break;
+        case 'add-child':         addHierarchyChild(tag); break;
+        case 'add-parent':        addHierarchyParent(tag); break;
+        case 'remove':            removeHierarchyNode(tag); break;
       }
     });
 
-    delete config.hierarchy[tag];
-    saveHierarchy();
-    renderHierarchy();
+    // Drag-drop delegation. Drag events don't bubble the same way as
+    // clicks — they fire on the dragged element directly. But since
+    // the draggable element IS the .hierarchy-node, we can listen at
+    // the container and check event.target.
+    container.addEventListener('dragstart', (event) => {
+      const node = event.target.closest('.hierarchy-node');
+      if (!node) return;
+      const tag = node.dataset.tag;
+      if (tag) handleDragStart(event, tag);
+    });
+
+    container.addEventListener('dragover', (event) => {
+      const node = event.target.closest('.hierarchy-node');
+      if (!node) return;
+      handleDragOver(event);
+    });
+
+    container.addEventListener('drop', (event) => {
+      const node = event.target.closest('.hierarchy-node');
+      if (!node) return;
+      const tag = node.dataset.tag;
+      if (tag) handleDrop(event, tag);
+    });
   }
 
   // Drag and drop
@@ -1553,21 +2050,29 @@ function renderImages(newImages) {
 
   function handleDrop(event, targetTag) {
     event.preventDefault();
-    event.currentTarget.classList.remove('drag-over');
-    event.currentTarget.style.opacity = '1';
+    document.querySelectorAll('.hierarchy-node.drag-over').forEach(el =>
+      el.classList.remove('drag-over')
+    );
 
     if (!draggedTag || draggedTag === targetTag) return;
 
-    if (isAncestor(draggedTag, targetTag)) {
-      showToast('Cannot drop parent onto its child', 'error');
-      return;
+    // Disconnect dragged from all its current parents
+    for (const [p, children] of Object.entries(config.hierarchy)) {
+      config.hierarchy[p] = children.filter(c => c !== draggedTag);
     }
 
-    config.hierarchy[draggedTag].implies = [targetTag];
-    saveHierarchy();
-    renderHierarchy();
+    // Connect target → dragged (target becomes parent)
+    if (!config.hierarchy[targetTag]) config.hierarchy[targetTag] = [];
+    if (!config.hierarchy[targetTag].includes(draggedTag)) {
+      config.hierarchy[targetTag].push(draggedTag);
+    }
+
+    // Make sure dragged still has its own entry
+    if (!config.hierarchy[draggedTag]) config.hierarchy[draggedTag] = [];
 
     draggedTag = null;
+    saveHierarchy();
+    renderHierarchy();
   }
 
   function isAncestor(potentialAncestor, tag) {
@@ -1593,7 +2098,7 @@ function renderImages(newImages) {
     
     const nameSpan = document.createElement('span');
     nameSpan.className = 'tag-name';
-    nameSpan.textContent = name;
+    nameSpan.textContent = (name || '').replace(/_/g, ' ');
     nameSpan.onclick = (e) => {
       e.stopPropagation();
       if (onCategoryChange) {
@@ -1678,7 +2183,7 @@ function renderImages(newImages) {
         onSave(input.value);
       } else if (e.key === 'Escape') {
         // Restore original
-        nameSpan.textContent = parseTag(currentFullTag).name;
+        nameSpan.textContent = parseTag(currentFullTag).name.replace(/_/g, ' ');
         nameSpan.style.display = '';
         input.remove();
         if (removeBtn) removeBtn.style.display = '';
@@ -1843,6 +2348,20 @@ function renderImages(newImages) {
     }, 3000);
   }
 
+  /**
+   * Convert a canonical tag string into its display form.
+   * Strips category prefix; converts underscores to spaces.
+   *
+   *   "character:dizzy_dokuro" → "dizzy dokuro"
+   *   "1girl"                  → "1girl"
+   *   "general:school_uniform" → "school uniform"
+   */
+  function displayName(tag) {
+    if (!tag) return '';
+    const { name } = parseTag(tag);
+    return (name || '').replace(/_/g, ' ');
+  }
+
   function closeModal(modalId) {
     document.getElementById(modalId).classList.add('hidden');
   }
@@ -1867,9 +2386,11 @@ function renderImages(newImages) {
 
   function escapeAttr(str) {
     return String(str || '')
-      .replace(/\\/g, '\\\\')
-      .replace(/'/g, "\\'")
-      .replace(/"/g, '\\"');
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
   }
 
   function debounce(func, wait) {
@@ -1879,3 +2400,22 @@ function renderImages(newImages) {
       timeout = setTimeout(() => func.apply(this, args), wait);
     };
   }
+
+window.filterAliases       = filterAliases;
+window.filterBlacklist     = filterBlacklist;
+window.filterWhitelist     = filterWhitelist;
+window.filterHierarchy     = filterHierarchy;
+window.expandAllHierarchy  = expandAllHierarchy;
+window.collapseAllHierarchy = collapseAllHierarchy;
+window.closeModal          = closeModal;
+window.canonizeConfigSection = canonizeConfigSection;
+window.exportConfigSection   = exportConfigSection;
+window.exportAllConfigs      = exportAllConfigs;
+window.refreshAllImages      = refreshAllImages;
+window.rebuildIndex          = rebuildIndex;
+window.refreshCurrentImage   = refreshCurrentImage;
+window.rescanCurrentImage    = rescanCurrentImage;
+window.setupHierarchyDelegation = setupHierarchyDelegation;
+window.setupSuggestionsDelegation = setupSuggestionsDelegation;
+window.aliasesNextPage = () => { aliasesCurrentPage++; renderAliases(); };
+window.aliasesPrevPage = () => { if (aliasesCurrentPage > 0) { aliasesCurrentPage--; renderAliases(); } };
