@@ -325,22 +325,6 @@ async function saveToServer(data) {
   }
 }
 
-
-// Save data to server or fallback to IndexedDB
-async function saveToDatabase(data) {
-  if (settings.useLocalServer) {
-    try {
-      console.log("📤 Attempting server save...");
-      return await saveToServer(data);
-    } catch (error) {
-      console.error("Server failed, using browser storage:", error);
-    }
-  }
-  
-  console.log("📦 Using browser storage...");
-  return await saveToIndexedDB(data);
-}
-
 // Utility function to detect media type
 function detectMediaType(url) {
   if (!url) return 'image';
@@ -530,131 +514,91 @@ function hexToBinary(hex) {
 }
 
 // Download image
-async function downloadMedia(mediaUrl, filename) {
+/**
+ * Fetch the media bytes. Same Pixiv arcana as before — we keep using
+ * the Referer header trick because the extension is the only thing
+ * that can cookie-attach to the source site. Returns:
+ *   { blob, mediaType, suggestedFilename }
+ * or null on hard failure. The server is responsible for writing
+ * the bytes to disk; this function only obtains them.
+ *
+ * `suggestedFilename` is a hint for the server to pick an extension
+ * — it's not a final filename. The server controls the naming.
+ */
+async function fetchMediaBlob(mediaUrl, baseFilename) {
   try {
-    // For videos, we might need to use fetch to download properly
     const contentType = await detectContentType(mediaUrl);
-    const isPixivUrl = mediaUrl.includes('pximg.net'); // Special Pixiv handling
-    
+    const isPixivUrl = mediaUrl.includes('pximg.net');
+
+    // Default extension from URL
+    let extension = mediaUrl.split('.').pop().split(/[?#]/)[0] || 'jpg';
+    if (isPixivUrl && mediaUrl.includes('_p0')) {
+      const m = mediaUrl.match(/_p0\.([^.?]+)/);
+      if (m && m[1]) extension = m[1];
+    }
+
     if (contentType === 'video') {
-      let fetchOptions = {};
-      
-      if (isPixivUrl) {
-        fetchOptions = {
-          headers: {
-            'Referer': 'https://www.pixiv.net/'
-          }
-        };
-      }
-      const response = await fetch(mediaUrl, { 
-        method: 'GET',
-        ...fetchOptions
-      });
-      
+      const fetchOptions = isPixivUrl
+        ? { headers: { 'Referer': 'https://www.pixiv.net/' } }
+        : {};
+      const response = await fetch(mediaUrl, { method: 'GET', ...fetchOptions });
       if (!response.ok) {
         throw new Error(`Failed to fetch video: ${response.status} ${response.statusText}`);
       }
-      
       const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      
-      await browser.downloads.download({
-        url: url,
-        filename: `${settings.saveFolder}/${filename}`,
-        saveAs: false
-      });
-      
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      return contentType;
-    } else if (isPixivUrl) {
-      // For Pixiv images, we need to use fetch with the Referer header
-      console.log("Downloading Pixiv image with special handling:", mediaUrl);
-      
-      try {
-        const response = await fetch(mediaUrl, {
-          headers: {
-            'Referer': 'https://www.pixiv.net/'
-          }
-        });
-        
-        if (!response.ok) {
-          console.error(`Pixiv fetch failed: ${response.status} ${response.statusText}`);
-          
-          // Try with .png extension if .jpg failed (common on Pixiv)
-          if (mediaUrl.endsWith('.jpg') || mediaUrl.endsWith('_p0.jpg')) {
-            const pngUrl = mediaUrl.replace(/\.jpg$|_p0\.jpg$/, '_p0.png');
-            console.log("Trying PNG instead:", pngUrl);
-            
-            const pngResponse = await fetch(pngUrl, {
-              headers: {
-                'Referer': 'https://www.pixiv.net/'
-              }
-            });
-            
-            if (!pngResponse.ok) {
-              throw new Error(`Pixiv PNG fetch also failed: ${pngResponse.status}`);
-            }
-            
-            const blob = await pngResponse.blob();
-            const url = URL.createObjectURL(blob);
-            
-            // Update filename to match PNG extension
-            let pngFilename = filename;
-            if (pngFilename.endsWith('.jpg')) {
-              pngFilename = pngFilename.replace(/\.jpg$/, '.png');
-            }
-            
-            await browser.downloads.download({
-              url: url,
-              filename: `${settings.saveFolder}/${pngFilename}`,
-              saveAs: false
-            });
-            
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
-            return 'image';
-          } else {
-            throw new Error(`Pixiv fetch failed: ${response.status} ${response.statusText}`);
-          }
-        }
-        
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        
-        await browser.downloads.download({
-          url: url,
-          filename: `${settings.saveFolder}/${filename}`,
-          saveAs: false
-        });
-        
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-        return 'image';
-      } catch (pixivError) {
-        console.error("Pixiv special download failed:", pixivError);
-        // Fall back to regular download as a last resort
-        await browser.downloads.download({
-          url: mediaUrl,
-          filename: `${settings.saveFolder}/${filename}`,
-          saveAs: false,
-          headers: [
-            { name: 'Referer', value: 'https://www.pixiv.net/' }
-          ]
-        }).catch(err => {
-          console.error("Final download attempt failed:", err);
-          throw err;
-        });
-        return 'image';
-      }
-    } else {
-      // Regular download for other images and GIFs
-      await browser.downloads.download({
-        url: mediaUrl,
-        filename: `${settings.saveFolder}/${filename}`,
-        saveAs: false
-      });
-      return contentType;
+      return {
+        blob,
+        mediaType: 'video',
+        suggestedFilename: `${baseFilename}.${extension}`,
+      };
     }
-  } catch (error) {
-    console.error(`Error downloading ${mediaUrl}:`, error);
+
+    if (isPixivUrl) {
+      // Pixiv image with Referer-header arcana, plus PNG fallback.
+      console.log("Fetching Pixiv image with Referer header:", mediaUrl);
+      let response = await fetch(mediaUrl, {
+        headers: { 'Referer': 'https://www.pixiv.net/' },
+      });
+
+      if (!response.ok) {
+        // Pixiv often returns 404 on .jpg when the original is .png
+        if (mediaUrl.endsWith('.jpg') || mediaUrl.endsWith('_p0.jpg')) {
+          const pngUrl = mediaUrl.replace(/\.jpg$|_p0\.jpg$/, '_p0.png');
+          console.log("Trying PNG instead:", pngUrl);
+          response = await fetch(pngUrl, {
+            headers: { 'Referer': 'https://www.pixiv.net/' },
+          });
+          if (!response.ok) {
+            throw new Error(`Pixiv PNG fetch also failed: ${response.status}`);
+          }
+          extension = 'png';
+        } else {
+          throw new Error(`Pixiv fetch failed: ${response.status} ${response.statusText}`);
+        }
+      }
+
+      const blob = await response.blob();
+      return {
+        blob,
+        mediaType: 'image',
+        suggestedFilename: `${baseFilename}.${extension}`,
+      };
+    }
+
+    // Generic branch — was URL-only via browser.downloads.download.
+    // Now needs a fetch to obtain bytes.
+    const response = await fetch(mediaUrl);
+    if (!response.ok) {
+      throw new Error(`Fetch failed: ${response.status} ${response.statusText}`);
+    }
+    const blob = await response.blob();
+    return {
+      blob,
+      mediaType: contentType || 'image',
+      suggestedFilename: `${baseFilename}.${extension}`,
+    };
+  } catch (err) {
+    console.error(`fetchMediaBlob error for ${mediaUrl}:`, err);
     return null;
   }
 }
@@ -729,36 +673,6 @@ function searchTagsIndexedDB(prefix) {
       reject(error);
     }
   });
-}
-
-// Save JSON data
-async function saveJSON(data, filename) {
-  const json = JSON.stringify(data, null, 2);
-  const blob = new Blob([json], {type: 'application/json'});
-  const url = URL.createObjectURL(blob);
-  
-  try {
-    // The downloads API returns a download ID when successful
-    const downloadId = await browser.downloads.download({
-      url: url,
-      filename: `${settings.saveFolder}/${filename}`,
-      saveAs: false
-    });
-    
-    // Wait a short time to ensure browser has processed the download
-    // before revoking the URL
-    setTimeout(() => {
-      URL.revokeObjectURL(url);
-    }, 1000);
-    
-    return true;
-  } catch (error) {
-    console.error("Error saving JSON:", error);
-    setTimeout(() => {
-      URL.revokeObjectURL(url);
-    }, 1000);
-    return false;
-  }
 }
 
 // Handle data saving
@@ -880,69 +794,66 @@ async function handleSaveData(data) {
       })
     };
     
-    // Save to database
-    const dbStartTime = performance.now();
-    const dbResult = await saveToDatabase(dbData); // ✅ Capture result
-    const dbTime = performance.now() - dbStartTime;
-    
-    console.log("Database save result:", dbResult); // ✅ Add debugging
-    
-    // Save media if available
-    let mediaSuccess = true;
-    let mediaType = 'image';
+    // ---- Fetch media bytes ----
+    let blobInfo = null;
     if (data.imageUrl) {
-      // Check if this is a Pixiv URL
-      const isPixivUrl = data.imageUrl.includes('pximg.net');
-      
-      // Extract file extension or default to jpg
-      let extension = data.imageUrl.split('.').pop().split(/[?#]/)[0] || 'jpg';
-      
-      // For Pixiv URLs with _p0, get the extension from the filename
-      if (isPixivUrl && data.imageUrl.includes('_p0')) {
-        const match = data.imageUrl.match(/_p0\.([^.?]+)/);
-        if (match && match[1]) {
-          extension = match[1];
-        }
+      blobInfo = await fetchMediaBlob(data.imageUrl, baseFilename);
+      if (!blobInfo) {
+        return { success: false, error: 'Failed to fetch media bytes' };
       }
-      
-      const mediaResult = await downloadMedia(data.imageUrl, `${baseFilename}.${extension}`);
-      mediaSuccess = !!mediaResult;
-      mediaType = mediaResult || 'image';
     }
-    
-    // Save JSON data with categorized tags
-    const jsonData = {
+
+    // ---- POST to server: image bytes + sidecar metadata in one request ----
+    const sidecarMetadata = {
       sourceUrl: data.url,
       tags: categorizedTags,
       imageUrl: data.imageUrl,
-      mediaType: mediaType,
+      mediaType: blobInfo ? blobInfo.mediaType : 'image',
       timestamp: data.timestamp || new Date().toISOString(),
-      imageHash: imageHash, // Include hash in JSON export
+      imageHash: imageHash,
       ...(data.poolId && {
         poolId: data.poolId,
-        poolIndex: parseInt(data.poolIndex, 10) || 0
-      })
+        poolIndex: parseInt(data.poolIndex, 10) || 0,
+      }),
     };
-    
-    const jsonSuccess = await saveJSON(jsonData, `${baseFilename}.json`);
+
+    const form = new FormData();
+    if (blobInfo) {
+      form.append('image', blobInfo.blob, blobInfo.suggestedFilename);
+      form.append('filenameHint', blobInfo.suggestedFilename);
+    }
+    form.append('metadata', JSON.stringify(sidecarMetadata));
+
+    const saveStartTime = performance.now();
+    let saveResult;
+    try {
+      const response = await fetch(`${settings.serverUrl}/api/staging/save`, {
+        method: 'POST',
+        body: form,
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`Server save failed: ${response.status} ${text}`);
+      }
+      saveResult = await response.json();
+    } catch (err) {
+      console.error('Server save failed:', err);
+      return { success: false, error: err.message };
+    }
+    const saveTime = performance.now() - saveStartTime;
 
     const totalTime = performance.now() - startTime;
-    console.log(`📊 OPTIMIZED PERFORMANCE:
-      Database save: ${dbTime.toFixed(2)}ms
-      Total time: ${totalTime.toFixed(2)}ms`);
+    console.log(`📊 SAVE PERFORMANCE: server=${saveTime.toFixed(2)}ms total=${totalTime.toFixed(2)}ms`);
 
-    // ✅ Prepare final response
-    const finalResponse = {
+    return {
       success: true,
-      mediaSuccess,
-      mediaType,
-      jsonSuccess,
+      mediaSuccess: !!blobInfo,
+      mediaType: sidecarMetadata.mediaType,
+      jsonSuccess: true,
       imageHash,
-      duplicateWarning  // ✅ This is now properly scoped
+      duplicateWarning,
+      serverImage: saveResult.image,   // full image record from the server
     };
-    
-    console.log("🎉 handleSaveData returning:", finalResponse); // ✅ Add debugging
-    return finalResponse;
     
   } catch (error) {
     console.error("❌ Error in handleSaveData:", error);
@@ -956,117 +867,69 @@ async function handleSaveBatchImage(data) {
 
   try {
     console.log("🔄 handleSaveBatchImage starting...", data.fileName);
-    
-    // Generate filenames for batch upload
-    const timestamp = new Date().getTime();
-    
-    // Handle case where poolId might not exist
-    let baseFilename;
-    if (data.poolId) {
-      baseFilename = `batch_${data.poolId}_${String(data.poolIndex).padStart(3, '0')}_${timestamp}`;
-    } else {
-      baseFilename = `batch_${timestamp}`;
-    }
-    
-    // Get file extension from original filename
-    const extension = data.fileName.split('.').pop().toLowerCase();
-    const finalFilename = `${baseFilename}.${extension}`;
-    
-    // Get the image hash from the data (computed in batch-upload.js)
-    const imageHash = data.imageHash || null;
-    if (imageHash) {
-      console.log(`📋 Image hash received: ${imageHash}`);
-    }
-    
-    // Save the actual file
-    let mediaSuccess = true;
-    let mediaType = 'image';
-    
-    if (data.blobUrl) {
-      const mediaResult = await downloadFileFromBlob(data.blobUrl, finalFilename);
-      mediaSuccess = !!mediaResult;
-      mediaType = mediaResult || 'image';
-    }
-    
-    // Process tags for better search
-    const tagTexts = data.tags.map(tag => {
-      if (tag.includes(':')) {
-        const [category, name] = tag.split(':', 2);
-        return [tag.toLowerCase(), name.toLowerCase()];
-      }
-      return [tag.toLowerCase()];
-    }).flat();
 
-    // Prepare data for database - now includes imageHash
-    const dbData = {
-      url: data.url,
-      tags: data.tags,
-      tagText: tagTexts,
-      imageUrl: `${settings.saveFolder}/${finalFilename}`, // Local file path
-      timestamp: data.timestamp,
-      imageHash: imageHash, // ✅ Include hash in database
-      localFile: true,
-      // Only include pool data if provided
-      ...(data.poolId && {
-        poolId: data.poolId,
-        poolIndex: data.poolIndex
-      })
-    };
-    
-    // Save to database
-    const dbResult = await saveToDatabase(dbData);
-    
-    // Process tags into categories for JSON
+    // For batch uploads `data.fileBlob` is already in memory (came from
+    // file picker or drag-drop). Construct sidecar exactly like
+    // handleSaveData would, then POST.
     const categorizedTags = {};
-    data.tags.forEach(tag => {
+    (data.tags || []).forEach(tag => {
       if (tag.includes(':')) {
         const [category, name] = tag.split(':', 2);
-        if (!categorizedTags[category]) {
-          categorizedTags[category] = [];
-        }
+        if (!categorizedTags[category]) categorizedTags[category] = [];
         categorizedTags[category].push(name);
       } else {
-        if (!categorizedTags["general"]) {
-          categorizedTags["general"] = [];
-        }
-        categorizedTags["general"].push(tag);
+        if (!categorizedTags.general) categorizedTags.general = [];
+        categorizedTags.general.push(tag);
       }
     });
-    
-    // Save JSON metadata - now includes imageHash
-    const jsonData = {
-      sourceUrl: data.url,
+
+    if (data.poolId && data.poolIndex !== undefined) {
+      await checkAndHandlePoolIndexConflict(data.poolId, data.poolIndex);
+    }
+
+    const sidecarMetadata = {
+      sourceUrl: data.url || `local://batch/${data.fileName}`,
       tags: categorizedTags,
-      imageUrl: `${settings.saveFolder}/${finalFilename}`,
-      mediaType: mediaType,
-      timestamp: data.timestamp,
-      imageHash: imageHash, // ✅ Include hash in JSON
-      originalFileName: data.fileName,
-      localFile: true,
-      // Only include pool data if provided
+      imageUrl: null,
+      mediaType: data.mediaType || 'image',
+      timestamp: data.timestamp || new Date().toISOString(),
+      imageHash: data.imageHash || null,
       ...(data.poolId && {
         poolId: data.poolId,
-        poolIndex: data.poolIndex
-      })
+        poolIndex: parseInt(data.poolIndex, 10) || 0,
+      }),
     };
-    
-    const jsonSuccess = await saveJSON(jsonData, `${baseFilename}.json`);
+
+    const form = new FormData();
+    form.append('image', data.fileBlob, data.fileName);
+    form.append('filenameHint', data.fileName);
+    form.append('metadata', JSON.stringify(sidecarMetadata));
+
+    const response = await fetch(`${settings.serverUrl}/api/staging/save`, {
+      method: 'POST',
+      body: form,
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Batch save failed: ${response.status} ${text}`);
+    }
+    const saveResult = await response.json();
 
     const totalTime = performance.now() - startTime;
-    console.log(`📊 Batch image processed in ${totalTime.toFixed(2)}ms`);
+    console.log(`📊 BATCH SAVE: ${totalTime.toFixed(2)}ms`);
 
     return {
       success: true,
-      mediaSuccess,
-      mediaType,
-      jsonSuccess,
-      filename: finalFilename,
-      imageHash: imageHash // ✅ Return hash in response
+      mediaSuccess: true,
+      mediaType: sidecarMetadata.mediaType,
+      jsonSuccess: true,
+      imageHash: sidecarMetadata.imageHash,
+      serverImage: saveResult.image,
     };
-    
-  } catch (error) {
-    console.error("❌ Error in handleSaveBatchImage:", error);
-    return { success: false, error: error.message };
+
+  } catch (err) {
+    console.error("❌ Error in handleSaveBatchImage:", err);
+    return { success: false, error: err.message };
   }
 }
 

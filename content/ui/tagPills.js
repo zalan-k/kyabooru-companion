@@ -1,19 +1,22 @@
 /**
  * Tag Pills Component
- * Renders and manages tag pills in the tag display
+ * Renders and manages tag pills in the tag display.
+ *
+ * Updated: addTag() accepts an options.prepend flag so the overlay can
+ * insert newly-added tags at the top of the display rather than the
+ * bottom (matches the redesigned overlay UX).
  */
 window.TagSaver = window.TagSaver || {};
 window.TagSaver.UI = window.TagSaver.UI || {};
 
 window.TagSaver.UI.TagPills = (function() {
   let styleElement = null;
-  
+
   /**
    * Initialize the tag pills component
    */
   function initTagPills() {
     if (!styleElement) {
-      // Reference Styles through the namespace
       styleElement = window.TagSaver.UI.Styles.injectStyles(
         window.TagSaver.UI.Styles.tagStyles
       );
@@ -22,8 +25,6 @@ window.TagSaver.UI.TagPills = (function() {
 
   /**
    * Get current category from pill element
-   * @param {HTMLElement} pillElement - The pill element
-   * @returns {string} - Current category of the tag
    */
   function getCurrentCategory(pillElement) {
     const tag = pillElement.getAttribute('data-tag');
@@ -33,41 +34,38 @@ window.TagSaver.UI.TagPills = (function() {
 
   /**
    * Get tag name from pill element
-   * @param {HTMLElement} pillElement - The pill element
-   * @returns {string} - Tag name without category prefix
    */
   function getTagName(pillElement) {
     const tag = pillElement.getAttribute('data-tag');
     const [, name] = tag.includes(':') ? tag.split(':', 2) : ['general', tag];
-    return name || tag; // fallback to full tag if no category
+    return name || tag;
   }
 
   /**
    * Show category dropdown for a tag
    */
   function showCategoryDropdown(pillElement, onCategoryChange) {
-    // Remove existing dropdown
     const existing = document.querySelector('.tag-category-dropdown');
     if (existing) existing.remove();
-    
-    // Get current category and name dynamically
+
     const currentCategory = getCurrentCategory(pillElement);
     const tagName = getTagName(pillElement);
-    
+
     const categories = [
-      { value: 'general', label: 'General', color: 'rgba(153, 153, 153, 0.7)' },
-      { value: 'artist', label: 'Artist', color: 'rgba(255, 117, 117, 0.7)' },
+      { value: 'general',   label: 'General',   color: 'rgba(153, 153, 153, 0.7)' },
+      { value: 'artist',    label: 'Artist',    color: 'rgba(255, 117, 117, 0.7)' },
       { value: 'character', label: 'Character', color: 'rgba(121, 187, 255, 0.7)' },
       { value: 'copyright', label: 'Copyright', color: 'rgba(179, 136, 255, 0.7)' },
-      { value: 'meta', label: 'Meta', color: 'rgba(251, 192, 45, 0.7)' }
+      { value: 'meta',      label: 'Meta',      color: 'rgba(251, 192, 45, 0.7)' }
     ];
-    
+
     const dropdown = document.createElement('div');
     dropdown.className = 'tag-category-dropdown';
-    
+
     const rect = pillElement.getBoundingClientRect();
-    dropdown.style.cssText = `position: fixed; top: ${rect.bottom + 5}px; left: ${rect.left}px; z-index: 999999999;`;
-    
+    dropdown.style.cssText =
+      `position: fixed; top: ${rect.bottom + 5}px; left: ${rect.left}px; z-index: 999999999;`;
+
     categories.forEach(cat => {
       const option = document.createElement('div');
       option.className = 'tag-category-option';
@@ -77,27 +75,24 @@ window.TagSaver.UI.TagPills = (function() {
         ${cat.value === currentCategory ? '<span class="selected-mark">✓</span>' : ''}
       `;
       if (cat.value === currentCategory) option.classList.add('selected');
-      
+
       option.addEventListener('click', (e) => {
         e.stopPropagation();
         if (cat.value !== currentCategory) {
           const oldTag = pillElement.getAttribute('data-tag');
           const newTag = cat.value === 'general' ? tagName : `${cat.value}:${tagName}`;
-          
           pillElement.setAttribute('data-tag', newTag);
           pillElement.className = `tag-pill tag-${cat.value}`;
-          
           if (onCategoryChange) onCategoryChange(oldTag, newTag, cat.value);
         }
         dropdown.remove();
       });
-      
+
       dropdown.appendChild(option);
     });
-    
+
     document.body.appendChild(dropdown);
-    
-    // Close on outside click
+
     setTimeout(() => {
       const close = (e) => {
         if (!dropdown.contains(e.target) && !pillElement.contains(e.target)) {
@@ -110,45 +105,44 @@ window.TagSaver.UI.TagPills = (function() {
   }
 
   /**
-   * Render tag pills into the specified container
-   * @param {Array<string>} tags - Array of tags to render
-   * @param {HTMLElement} container - Container element to render tags into
-   * @param {Function} onDeleteTag - Callback when a tag is deleted
-   * @param {Function} onCategoryChange - Callback when a tag category is changed
+   * Build a single pill DOM element. Internal helper used by both
+   * renderTagPills (initial render) and addTag (incremental insert).
+   */
+  function buildPill(tag, onDeleteTag, onCategoryChange) {
+    const [category, name] = tag.includes(':') ? tag.split(':', 2) : ['general', tag];
+    const pill = document.createElement('span');
+    pill.className = `tag-pill tag-${category}`;
+    pill.setAttribute('data-tag', tag);
+    pill.innerHTML = `<span class="tag-content">${name}</span> <span class="tag-delete">×</span>`;
+
+    pill.querySelector('.tag-delete').addEventListener('click', (e) => {
+      e.stopPropagation();
+      pill.remove();
+      if (onDeleteTag) onDeleteTag(tag);
+    });
+
+    pill.querySelector('.tag-content').addEventListener('click', (e) => {
+      e.stopPropagation();
+      showCategoryDropdown(pill, onCategoryChange);
+    });
+
+    return pill;
+  }
+
+  /**
+   * Render all tag pills into the specified container (replaces existing children).
+   * Order is preserved as given.
    */
   function renderTagPills(tags, container, onDeleteTag, onCategoryChange) {
     initTagPills();
     container.innerHTML = '';
-    
     tags.forEach(tag => {
-      const [category, name] = tag.includes(':') ? tag.split(':', 2) : ['general', tag];
-      
-      const pill = document.createElement('span');
-      pill.className = `tag-pill tag-${category}`;
-      pill.setAttribute('data-tag', tag);
-      pill.innerHTML = `<span class="tag-content">${name}</span> <span class="tag-delete">×</span>`;
-      
-      // Delete handler
-      pill.querySelector('.tag-delete').addEventListener('click', (e) => {
-        e.stopPropagation();
-        pill.remove();
-        if (onDeleteTag) onDeleteTag(tag);
-      });
-      
-      // Category change handler - now gets current category dynamically
-      pill.querySelector('.tag-content').addEventListener('click', (e) => {
-        e.stopPropagation();
-        showCategoryDropdown(pill, onCategoryChange);
-      });
-      
-      container.appendChild(pill);
+      container.appendChild(buildPill(tag, onDeleteTag, onCategoryChange));
     });
   }
 
   /**
-   * Get all current tags from the display
-   * @param {HTMLElement} container - The tag display container
-   * @returns {Array<string>} - Array of tag strings
+   * Get all current tags from the display.
    */
   function getCurrentTagsFromDisplay(container) {
     const tagPills = container.querySelectorAll('.tag-pill');
@@ -156,50 +150,37 @@ window.TagSaver.UI.TagPills = (function() {
   }
 
   /**
-   * Add a new tag to the display
-   * @param {string} tag - Tag to add
-   * @param {HTMLElement} container - The tag display container
-   * @param {Function} onDeleteTag - Callback when a tag is deleted
-   * @param {Function} onCategoryChange - Callback when a tag category is changed
+   * Add a new tag pill to the display.
+   *
+   * @param {string} tag - tag string (with optional category prefix)
+   * @param {HTMLElement} container - the .tag-display element
+   * @param {Function} onDeleteTag - callback when pill is deleted
+   * @param {Function} onCategoryChange - callback when category is changed
+   * @param {Object} [options]
+   * @param {boolean} [options.prepend=false] - insert at top of container
+   *        instead of bottom. Used by the redesigned overlay so new
+   *        tags appear at the top of the scrollable tag list.
    */
-  function addTag(tag, container, onDeleteTag, onCategoryChange) {
+  function addTag(tag, container, onDeleteTag, onCategoryChange, options = {}) {
     const currentTags = getCurrentTagsFromDisplay(container);
-    
-    if (!currentTags.includes(tag)) {
-      const [category, name] = tag.includes(':') ? tag.split(':', 2) : ['general', tag];
-      
-      const pill = document.createElement('span');
-      pill.className = `tag-pill tag-${category}`;
-      pill.setAttribute('data-tag', tag);
-      pill.innerHTML = `<span class="tag-content">${name}</span> <span class="tag-delete">×</span>`;
-      
-      pill.querySelector('.tag-delete').addEventListener('click', (e) => {
-        e.stopPropagation();
-        pill.remove();
-        if (onDeleteTag) onDeleteTag(tag);
-      });
-      
-      // Category change handler - now gets current category dynamically
-      pill.querySelector('.tag-content').addEventListener('click', (e) => {
-        e.stopPropagation();
-        showCategoryDropdown(pill, onCategoryChange);
-      });
-      
+    if (currentTags.includes(tag)) return;
+
+    const pill = buildPill(tag, onDeleteTag, onCategoryChange);
+
+    if (options.prepend) {
+      container.insertBefore(pill, container.firstChild);
+    } else {
       container.appendChild(pill);
     }
   }
 
   /**
-   * Remove a tag from the display
-   * @param {string} tag - Tag to remove
-   * @param {HTMLElement} container - The tag display container
+   * Remove a tag from the display.
    */
   function removeTag(tag, container) {
     const pills = container.querySelectorAll('.tag-pill');
     pills.forEach(pill => {
-      if (pill.getAttribute('data-tag') === tag) {
-        pill.remove();
-      }
+      if (pill.getAttribute('data-tag') === tag) pill.remove();
     });
   }
 

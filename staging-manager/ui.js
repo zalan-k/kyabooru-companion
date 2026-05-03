@@ -55,6 +55,29 @@
       tab.addEventListener('click', () => switchTab(tab.dataset.tab));
     });
 
+    let _eventStream = null;
+    function startEventStream() {
+      if (_eventStream) return;
+      _eventStream = openStagingEventStream({
+        onImageSaved: (image) => {
+          // Skip if we already have it in `images` (defensive — shouldn't
+          // normally happen, but server retry / multiple SSE connections
+          // could theoretically deliver twice).
+          if (images.find(i => i.id === image.id)) return;
+
+          // Prepend to the in-memory list and refresh the grid.
+          // Respects current filter — if the image is filtered out by the
+          // active filter, it just won't render but stays in the list.
+          images.unshift(image);
+
+          // Re-render. If you have a more efficient append-one path that
+          // matches the current sort/filter, use it; otherwise renderImages
+          // is the catch-all.
+          renderImages();
+        },
+      });
+    }
+        
     // Infinite scroll
     const scrollContainer = document.getElementById('images-scroll-container');
     scrollContainer.addEventListener('scroll', handleImageScroll);

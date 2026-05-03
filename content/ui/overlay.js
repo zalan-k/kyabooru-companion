@@ -1,6 +1,39 @@
 /**
  * Overlay Component
- * Manages the tag input overlay UI
+ * Manages the tag input overlay UI.
+ *
+ * Rewrite of createOverlay() against the redesigned spec:
+ *
+ *   - The image preview is now part of the overlay (left flex item),
+ *     not a separate floating <div>.
+ *     positionImagePreview() and the imagePreviewElement global are gone.
+ *     hideImagePreview() is kept as a no-op since content.js calls it
+ *     externally and removing it would break that contract.
+ *
+ *   - HTML structure:
+ *
+ *       .tag-saver-extension-overlay     (backdrop, scrim)
+ *         .overlay-layout                (flex: image-card + overlay-content)
+ *           .image-card                  (image preview)
+ *           .overlay-content             (right panel, position: relative)
+ *             .duplicate-warning.hidden  (absolute, floats above panel)
+ *             .overlay-inner             (scrollable column)
+ *               .pool-block
+ *               .tag-input-block
+ *                 .autocomplete-dropdown (sibling, absolute, in same block)
+ *               .tag-display-wrapper
+ *                 .tag-display
+ *
+ *   - New tags PREPEND (top of the list) — uses tagPills addTag's
+ *     new options.prepend flag.
+ *
+ *   - URL display, shortcuts hint, "Save Anyway" / "Cancel" buttons in the
+ *     duplicate warning, and the inline style.cssText on the backdrop are
+ *     all gone — styles.js now owns positioning.
+ *
+ *   - showDuplicateWarning() accepts an optional hammingDistance third arg.
+ *     When provided, the warning shows it; when not, it falls back to the
+ *     "exact match" / "similar match" wording from before.
  */
 const autocompleteCache = new Map();
 const AUTOCOMPLETE_CACHE_TTL = 60000; // 1 minute
@@ -12,11 +45,43 @@ window.TagSaver.UI.Overlay = (function() {
   const Styles = window.TagSaver.UI.Styles;
   const TagPills = window.TagSaver.UI.TagPills;
   const Toast = window.TagSaver.UI.Toast;
-  
+
   let styleElement = null;
   let overlayElement = null;
-  let imagePreviewElement = null;
   let keydownListener = null; // Track the event listener globally
+
+  /* ---------------------------------------------------------------
+   *  Inline SVG icons used in the overlay HTML
+   * ------------------------------------------------------------- */
+
+  const ICON_LOAD_TAGS_ID =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>' +
+      '<path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>' +
+    '</svg>';
+
+  const ICON_LOAD_TAGS =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"/>' +
+      '<path d="M7 7h.01"/>' +
+    '</svg>';
+
+  const ICON_LOAD_ID =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<rect width="18" height="14" x="3" y="5" rx="2" ry="2"/>' +
+      '<path d="M7 15h4M15 15h2M7 11h2M13 11h4"/>' +
+    '</svg>';
+
+  const ICON_WARNING_TRIANGLE =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>' +
+      '<line x1="12" x2="12" y1="9" y2="13"/>' +
+      '<line x1="12" x2="12.01" y1="17" y2="17"/>' +
+    '</svg>';
+
+  /* ---------------------------------------------------------------
+   *  Pool index lookup
+   * ------------------------------------------------------------- */
 
   /**
    * Look up the highest index for a pool and write `highest + 1` into the
@@ -60,21 +125,26 @@ window.TagSaver.UI.Overlay = (function() {
     }
   }
 
+  /* ---------------------------------------------------------------
+   *  Init / styles
+   * ------------------------------------------------------------- */
+
   /**
    * Initialize the overlay component
    */
   function initOverlay() {
     if (!styleElement) {
-      // Include ALL necessary styles for the overlay
-      const combinedStyles = `
-        ${Styles.overlayStyles}
-        ${Styles.imagePreviewStyles}
-        ${Styles.tagStyles}
-      `;
-      styleElement = Styles.injectStyles(combinedStyles);
-      console.log("All overlay styles injected");
+      // styles.js's getAllStyles() now bundles everything the overlay needs
+      // (variables, reset, overlay, duplicate warning, pool, autocomplete,
+      // tags, media placeholder).
+      styleElement = Styles.injectStyles(Styles.getAllStyles());
+      console.log('All overlay styles injected');
     }
   }
+
+  /* ---------------------------------------------------------------
+   *  Last-saved data (localStorage-backed memory)
+   * ------------------------------------------------------------- */
 
   /**
    * Load last saved data from localStorage
@@ -83,7 +153,7 @@ window.TagSaver.UI.Overlay = (function() {
     try {
       const stored = localStorage.getItem('tagSaverLastSaved');
       console.log('🔍 Loading stored data:', stored);
-      
+
       return stored ? JSON.parse(stored) : null;
     } catch (error) {
       console.error('❌ Error loading data:', error);
@@ -91,13 +161,13 @@ window.TagSaver.UI.Overlay = (function() {
     }
   }
 
-/**
+  /**
    * Load last saved tags and ID into the overlay
    */
   async function loadLastTagsAndId() {
     const lastData = loadLastSavedData();
     if (!lastData) {
-      Toast.showError("No previously saved data found");
+      Toast.showError('No previously saved data found');
       return;
     }
 
@@ -105,19 +175,18 @@ window.TagSaver.UI.Overlay = (function() {
     if (lastData.tags && lastData.tags.length > 0) {
       const tagDisplay = overlayElement.querySelector('#tag-display');
       if (tagDisplay) {
-        // 🔥 FIXED: Provide proper callbacks for tag functionality
         TagPills.renderTagPills(
-          lastData.tags, 
+          lastData.tags,
           tagDisplay,
-          // onDeleteTag callback
           (deletedTag) => {
             console.log(`Tag deleted: ${deletedTag}`);
+            updateTagCount();
           },
-          // onCategoryChange callback
           (oldTag, newTag, newCategory) => {
             console.log(`Tag category changed: ${oldTag} -> ${newTag}`);
           }
         );
+        updateTagCount();
         Toast.showSuccess(`Loaded ${lastData.tags.length} tags from memory`);
       }
     }
@@ -137,7 +206,7 @@ window.TagSaver.UI.Overlay = (function() {
     }
 
     if (!lastData.tags?.length && !lastData.poolId) {
-      Toast.showError("No tags or pool ID found in memory");
+      Toast.showError('No tags or pool ID found in memory');
     }
   }
 
@@ -147,7 +216,7 @@ window.TagSaver.UI.Overlay = (function() {
   async function loadLastIdOnly() {
     const lastData = loadLastSavedData();
     if (!lastData || !lastData.poolId) {
-      Toast.showError("No pool ID found in memory");
+      Toast.showError('No pool ID found in memory');
       return;
     }
 
@@ -170,628 +239,588 @@ window.TagSaver.UI.Overlay = (function() {
   function loadLastTagsOnly() {
     const lastData = loadLastSavedData();
     if (!lastData || !lastData.tags || lastData.tags.length === 0) {
-      Toast.showError("No tags found in memory");
+      Toast.showError('No tags found in memory');
       return;
     }
 
     const tagDisplay = overlayElement.querySelector('#tag-display');
     if (tagDisplay) {
       TagPills.renderTagPills(
-        lastData.tags, 
+        lastData.tags,
         tagDisplay,
         (deletedTag) => {
           console.log(`Tag deleted: ${deletedTag}`);
+          updateTagCount();
         },
         (oldTag, newTag, newCategory) => {
           console.log(`Tag category changed: ${oldTag} -> ${newTag}`);
         }
       );
+      updateTagCount();
       Toast.showSuccess(`Loaded ${lastData.tags.length} tags from memory`);
     }
   }
 
-function positionImagePreview(previewElement, overlayContent) {
-  if (!previewElement || !overlayContent) return;
-  
-  const overlayRect = overlayContent.getBoundingClientRect();
-  previewElement.style.bottom = `${window.innerHeight - overlayRect.top + 10}px`;
-  previewElement.style.left = `${overlayRect.left + (overlayRect.width/2) - (previewElement.offsetWidth/2)}px`;
-}
+  /* ---------------------------------------------------------------
+   *  Tag count badge
+   * ------------------------------------------------------------- */
 
-/**
- * Create and show the tag input overlay
- * @param {Object} options - Overlay options
- * @param {string} options.imageUrl - URL of image to display
- * @param {Array<string>} options.tags - Initial tags to display
- * @param {string} options.pageUrl - Current page URL
- * @param {Function} options.onSave - Callback when Save is clicked
- * @param {Function} options.onCancel - Callback when overlay is closed
- * @returns {HTMLElement} - The created overlay element
- */
-function createOverlay(options = {}) {
-  // Ensure styles are injected
-  initOverlay();
-  
-  // First, clean up any existing overlay
-  if (overlayElement) {
-    closeOverlay();
+  /**
+   * Sync the count badge in the tag-display label with however many pills
+   * are actually in the display right now. Cheap to call; safe to spam after
+   * any tag-list mutation.
+   */
+  function updateTagCount() {
+    if (!overlayElement) return;
+    const tagDisplay = overlayElement.querySelector('#tag-display');
+    const countEl = overlayElement.querySelector('#tag-count');
+    if (!tagDisplay || !countEl) return;
+    countEl.textContent = String(tagDisplay.querySelectorAll('.tag-pill').length);
   }
-  
-  // Extract options
-  const {
-    imageUrl = null,
-    mediaType = 'image',
-    tags = [],
-    pageUrl = window.location.href,
-    onSave = () => {},
-    onCancel = () => {}
-  } = options;
-  
-  // Create the overlay container 
-  const overlay = document.createElement('div');
-  overlay.className = 'tag-saver-extension-overlay';
-  
-  // Force some basic styling to ensure visibility
-  overlay.style.cssText = "position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 999999990; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.5);";
-  
-  // Create floating image preview if we have an image
-  if (imageUrl) {
-    const imagePreview = document.createElement('div');
-    imagePreview.className = 'ts-floating-image-preview';
-    
+
+  /* ---------------------------------------------------------------
+   *  Image card content (image / video / gif placeholder)
+   * ------------------------------------------------------------- */
+
+  /**
+   * Build the initial markup for the image card based on media type.
+   * For video/gif this returns a placeholder; the first-frame extraction
+   * happens asynchronously after the overlay is mounted (see
+   * mountAsyncMediaPreview below).
+   */
+  function buildImageCardMarkup(imageUrl, mediaType) {
+    if (!imageUrl) return '';
+
     if (mediaType === 'video' || mediaType === 'gif') {
-      // First show placeholder while loading
-      imagePreview.innerHTML = `
+      const label = mediaType === 'video' ? 'Loading video preview…' : 'Loading GIF preview…';
+      const icon = mediaType === 'video' ? '🎬' : 'GIF';
+      return `
         <div class="media-placeholder ${mediaType}-placeholder">
-          <div class="media-icon">${mediaType === 'video' ? '🎬' : 'GIF'}</div>
-          <div class="media-text">${mediaType === 'video' ? 'Loading Video Preview...' : 'Loading GIF Preview...'}</div>
+          <div class="media-icon">${icon}</div>
+          <div class="label">${label}</div>
         </div>
       `;
-      
-      // Position placeholder immediately
-      requestAnimationFrame(() => {
-        positionImagePreview(imagePreview, overlayContent);
-        imagePreviewElement.style.opacity = '1';
-      });
-      
-      // Try to extract first frame
-      try {
-        window.TagSaver.Hash.extractVideoFirstFrame(imageUrl)
-          .then(result => {
-            // Only proceed if preview still exists
-            if (imagePreviewElement && document.body.contains(imagePreviewElement)) {
-              imagePreview.innerHTML = `<img src="${result.dataUrl}" alt="${mediaType} preview">`;
-              // No need to reposition - already positioned with placeholder
-            }
-          })
-          .catch(error => {
-            console.error(`Failed to extract ${mediaType} frame:`, error);
-            // Placeholder already showing, no need to update
-          });
-      } catch (error) {
-        console.error(`Error setting up ${mediaType} preview:`, error);
-        // Placeholder already showing, no need to update
-      }
-    } else {
-      // Regular image
-      imagePreview.innerHTML = `<img src="${imageUrl}" alt="Image to be saved">`;
-      
-      // Position after load or after timeout
-      const img = imagePreview.querySelector('img');
-      let positioned = false;
-      
-      if (img) {
-        // Set up load event
-        img.onload = () => {
-          if (!positioned) {
-            positioned = true;
-            positionImagePreview(imagePreview, overlayContent);
-            imagePreviewElement.style.opacity = '1';
-          }
-        };
-        
-        // Set up error handler
-        img.onerror = () => {
-          if (!positioned) {
-            positioned = true;
-            console.error("Failed to load image preview");
-            positionImagePreview(imagePreview, overlayContent);
-            imagePreviewElement.style.opacity = '1';
-          }
-        };
-        
-        // Fallback timeout in case neither event fires
-        setTimeout(() => {
-          if (!positioned) {
-            positioned = true;
-            positionImagePreview(imagePreview, overlayContent);
-            imagePreviewElement.style.opacity = '1';
-          }
-        }, 3000);
-      } else {
-        // Fallback if img element not found
-        positionImagePreview(imagePreview, overlayContent);
-        imagePreviewElement.style.opacity = '1';
-      }
     }
-    
-    document.body.appendChild(imagePreview);
-    imagePreviewElement = imagePreview;
+
+    return `<img src="${imageUrl}" alt="Image to be saved" />`;
   }
 
-  overlay.innerHTML = `
-    <div class="overlay-content" style="width: 80%; max-width: 1000px; background: rgba(30, 30, 30, 0.85); padding: 20px; border-radius: 16px; color: white;">
-      <div class="header">
-        <div class="url-display">URL: <span id="current-url">${pageUrl}</span></div>
-      </div>
-    
-      <div class="tag-input-container">
-        <div id="tag-display" class="tag-display"></div>
-        <input type="text" placeholder="Type a tag and press Enter to add..." id="tag-input" value=" " />
-      </div>
-    
-      <!-- Pool Management UI -->
-      <div class="pool-container">
-        <div class="pool-header">
-          <span class="pool-title">Image Pool</span>
-            <div class="header-buttons">
-              <button id="load-last-tags-id" class="pool-action-btn" title="Load last saved tags and pool ID">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
-              </button>
-              <button id="load-last-tags" class="pool-action-btn" title="Load last saved tags only">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"/><path d="M7 7h.01"/></svg>
-              </button>
-              <button id="load-last-id" class="pool-action-btn" title="Load last saved pool ID only">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="14" x="3" y="5" rx="2" ry="2"/><path d="M7 15h4M15 15h2M7 11h2M13 11h4"/></svg>
-              </button>
-              <button id="generate-pool-id" class="pool-action-btn pool-action-btn-text">Generate</button>
-            </div>
-        </div>
-        <div class="pool-fields">
-          <div class="pool-field-row">
-            <label for="pool-id">Pool ID:</label>
-            <input type="text" id="pool-id" placeholder="Enter or generate pool ID" />
-          </div>
-          <div class="pool-field-row">
-            <label for="pool-index">Index:</label>
-            <input type="number" id="pool-index" placeholder="Position in pool" min="0" value="0" />
-          </div>
-        </div>
-      </div>
-    
-      <div class="shortcuts-hint">Press <kbd>Enter</kbd> to save or <kbd>Esc</kbd> to cancel</div>
-    </div>
-  `;
-  
-  document.body.appendChild(overlay);
-  overlayElement = overlay;
-  const overlayContent = overlay.querySelector('.overlay-content');
-  
-  const generatePoolIdButton = overlay.querySelector('#generate-pool-id');
-  const poolIdInput = overlay.querySelector('#pool-id');
-  const poolIndexInput = overlay.querySelector('#pool-index');
-  const loadLastTagsIdButton = overlay.querySelector('#load-last-tags-id');
-  const loadLastTagsButton = overlay.querySelector('#load-last-tags');
-  const loadLastIdButton = overlay.querySelector('#load-last-id');
+  /**
+   * For video/gif media, kick off the async first-frame extraction. When
+   * it resolves, swap the placeholder for an actual <img>. If the overlay
+   * has been closed in the meantime, do nothing.
+   */
+  function mountAsyncMediaPreview(imageCardEl, imageUrl, mediaType) {
+    if (mediaType !== 'video' && mediaType !== 'gif') return;
+    if (!window.TagSaver.Hash || !window.TagSaver.Hash.extractVideoFirstFrame) {
+      console.warn('Hash.extractVideoFirstFrame unavailable; placeholder will remain');
+      return;
+    }
 
-  // Focus the input - ensures cursor is after the space that's preloaded
-  const input = overlay.querySelector('#tag-input');
-  const tagDisplay = overlay.querySelector('#tag-display');
-
-  // Memory button event listeners
-  loadLastTagsIdButton.addEventListener('click', loadLastTagsAndId);
-  loadLastTagsButton.addEventListener('click', loadLastTagsOnly);
-  loadLastIdButton.addEventListener('click', loadLastIdOnly);
-  
-  generatePoolIdButton.addEventListener('click', async () => {
-    // Disable button during fetch to prevent double-clicks
-    generatePoolIdButton.disabled = true;
-    generatePoolIdButton.textContent = '...';
-    
-    try {
-      const response = await browser.runtime.sendMessage({ action: "generate-pool-id" });
-      if (response.success) {
-        poolIdInput.value = response.poolId;
-        // When a new pool is created, default to index 0
-        poolIndexInput.value = '0';
-        
-        if (response.source === 'client-fallback') {
-          console.warn('Pool ID generated client-side; server was unavailable.');
+    window.TagSaver.Hash.extractVideoFirstFrame(imageUrl)
+      .then((result) => {
+        if (imageCardEl && document.body.contains(imageCardEl) && result && result.dataUrl) {
+          imageCardEl.innerHTML = `<img src="${result.dataUrl}" alt="${mediaType} preview" />`;
         }
-      } else {
-        console.error('Pool generation failed:', response.error);
-      }
-    } catch (err) {
-      console.error('Pool generation error:', err);
-      // Last-resort fallback if even the message dispatch fails
-      poolIdInput.value = Math.random().toString(36).substring(2, 10);
-      poolIndexInput.value = '0';
-    } finally {
-      generatePoolIdButton.disabled = false;
-      generatePoolIdButton.textContent = 'Generate';
-    }
-  });
-
-  poolIdInput.addEventListener('change', () => {
-    populateNextPoolIndex(poolIdInput.value);
-  });
-
-  if (input) {
-    setTimeout(() => input.focus(), 50);
-  } else {
-    console.error("Input field not found!");
-  }
-  
-  // Set up the tag display (UPDATED SECTION)
-  if (tagDisplay) {
-    // 🔥 FIXED: Provide proper callbacks for tag functionality
-    TagPills.renderTagPills(
-      tags, 
-      tagDisplay,
-      // onDeleteTag callback
-      (deletedTag) => {
-        console.log(`Tag deleted: ${deletedTag}`);
-      },
-      // onCategoryChange callback  
-      (oldTag, newTag, newCategory) => {
-        console.log(`Tag category changed: ${oldTag} -> ${newTag}`);
-      }
-    );
-  } else {
-    console.error("Tag display not found!");
-  }
-  
-  // Create autocomplete dropdown
-  const autocompleteDropdown = document.createElement('div');
-  autocompleteDropdown.className = 'tag-autocomplete-dropdown';
-  autocompleteDropdown.style.display = 'none';
-  
-  // Add it after the input field in the container
-  input.parentNode.appendChild(autocompleteDropdown);
-  
-  // Track selected item in dropdown
-  let selectedIndex = -1;
-  
-  // Position the image preview above the overlay
-  if (imagePreviewElement) {
-    setTimeout(() => {
-      const overlayContent = document.querySelector('.overlay-content');
-      if (overlayContent && imagePreviewElement) {
-        const overlayRect = overlayContent.getBoundingClientRect();
-        imagePreviewElement.style.bottom = (window.innerHeight - overlayRect.top + 10) + 'px';
-        imagePreviewElement.style.left = (overlayRect.left + (overlayRect.width / 2) - (imagePreviewElement.offsetWidth / 2)) + 'px';
-      }
-    }, 50);
-  }
-  
-  // Save function
-  function saveData() {
-    // Get tags from the display pills
-    if (!tagDisplay) {
-      console.error("Tag display not found when saving!");
-      return;
-    }
-    
-    const displayTags = TagPills.getCurrentTagsFromDisplay(tagDisplay);
-    
-    // Get pool data only if pool ID is provided
-    const poolData = poolIdInput.value.trim() ? {
-      poolId: poolIdInput.value.trim(),
-      poolIndex: parseInt(poolIndexInput.value, 10) || 0
-    } : null;
-    
-    // Remove the floating image preview if it exists
-    hideImagePreview();
-    
-    // Close overlay with animation
-    closeOverlay();
-    
-    // Call the save callback with pool data
-    onSave(displayTags, poolData);
-  }
-
-  // Handle autocomplete suggestions
-  async function updateAutocompleteSuggestions() {
-    const query = input.value.trim();
-    
-    if (query.length < 2) {
-      autocompleteDropdown.style.display = 'none';
-      selectedIndex = -1;
-      return;
-    }
-    
-    // Check local cache first
-    const cacheKey = query.toLowerCase();
-    const cached = autocompleteCache.get(cacheKey);
-    
-    if (cached && (Date.now() - cached.timestamp) < AUTOCOMPLETE_CACHE_TTL) {
-      console.log(`🚀 Local cache hit for: ${query}`);
-      renderSuggestions(cached.data);
-      return;
-    }
-    
-    try {
-      console.log(`🔍 Searching server for: ${query}`);
-      const startTime = performance.now();
-      
-      // Request tag suggestions from background script
-      const suggestions = await browser.runtime.sendMessage({
-        action: 'search-tags',
-        query: query
+      })
+      .catch((error) => {
+        console.error(`Failed to extract ${mediaType} frame:`, error);
       });
-      
-      const duration = performance.now() - startTime;
-      console.log(`📊 Search completed in ${duration.toFixed(1)}ms`);
-      
-      if (suggestions && suggestions.length > 0) {
-        // Cache the result locally
-        autocompleteCache.set(cacheKey, {
-          data: suggestions,
-          timestamp: Date.now()
-        });
-        
-        renderSuggestions(suggestions);
-      } else {
-        autocompleteDropdown.style.display = 'none';
-        selectedIndex = -1;
-      }
-    } catch (error) {
-      console.error('Autocomplete error:', error);
-      autocompleteDropdown.style.display = 'none';
-    }
   }
-  
-  // Add this helper function to overlay.js:
-  function renderSuggestions(suggestions) {
-    autocompleteDropdown.innerHTML = '';
-    
-    suggestions.forEach(tag => {
-      const item = document.createElement('div');
-      item.className = 'autocomplete-item';
-      
-      // Format tag display (category:name)
-      let displayText = tag;
-      let category = 'general';
-      
-      if (tag.includes(':')) {
-        const [cat, name] = tag.split(':', 2);
-        category = cat;
-        displayText = name;
+
+  /* ---------------------------------------------------------------
+   *  createOverlay — main entrypoint
+   * ------------------------------------------------------------- */
+
+  /**
+   * Create and show the tag input overlay
+   * @param {Object} options - Overlay options
+   * @param {string} options.imageUrl - URL of image to display
+   * @param {string} options.mediaType - 'image' (default) | 'video' | 'gif'
+   * @param {Array<string>} options.tags - Initial tags to display
+   * @param {string} options.pageUrl - Current page URL (kept for save callback)
+   * @param {Function} options.onSave - Callback when Save is clicked
+   * @param {Function} options.onCancel - Callback when overlay is closed
+   * @returns {HTMLElement} - The created overlay element
+   */
+  function createOverlay(options = {}) {
+    // Ensure styles are injected
+    initOverlay();
+
+    // First, clean up any existing overlay
+    if (overlayElement) {
+      closeOverlay();
+    }
+
+    const {
+      imageUrl = null,
+      mediaType = 'image',
+      tags = [],
+      pageUrl = window.location.href,
+      onSave = () => {},
+      onCancel = () => {}
+    } = options;
+
+    // Backdrop / overlay root. styles.js owns the positioning — no inline
+    // style.cssText anymore.
+    const overlay = document.createElement('div');
+    overlay.className = 'tag-saver-extension-overlay';
+
+    overlay.innerHTML = `
+      <div class="overlay-layout">
+
+        <div class="image-card" id="ts-image-card">
+          ${buildImageCardMarkup(imageUrl, mediaType)}
+        </div>
+
+        <div class="overlay-content">
+
+          <div class="duplicate-warning hidden" id="duplicate-warning"></div>
+
+          <div class="overlay-inner">
+
+            <div class="pool-block">
+              <div class="pool-header">
+                <span class="pool-title">Image pool</span>
+                <div class="pool-buttons">
+                  <button id="load-last-tags-id" class="pool-action-btn" type="button">${ICON_LOAD_TAGS_ID}</button>
+                  <button id="load-last-tags"    class="pool-action-btn" type="button">${ICON_LOAD_TAGS}</button>
+                  <button id="load-last-id"      class="pool-action-btn" type="button">${ICON_LOAD_ID}</button>
+                  <button id="generate-pool-id"  class="pool-action-btn pool-action-btn-text" type="button">Generate</button>
+                </div>
+              </div>
+              <div class="pool-fields">
+                <div class="pool-field">
+                  <label for="pool-id">Pool ID</label>
+                  <input id="pool-id" type="text" placeholder="Enter or generate pool ID" />
+                </div>
+                <div class="pool-field">
+                  <label for="pool-index">Index</label>
+                  <input id="pool-index" type="number" placeholder="Position in pool" min="0" value="0" />
+                </div>
+              </div>
+            </div>
+
+            <div class="tag-input-block">
+              <input type="text" id="tag-input" placeholder="Type a tag and press Enter…" value=" " />
+              <div class="autocomplete-dropdown"></div>
+            </div>
+
+            <div class="tag-display-wrapper">
+              <div class="tag-display-label">
+                <span>Tags</span>
+                <span class="count" id="tag-count">${tags.length}</span>
+              </div>
+              <div id="tag-display" class="tag-display"></div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+    overlayElement = overlay;
+
+    // Kick off async frame extraction for video/gif (no-op for images)
+    const imageCardEl = overlay.querySelector('#ts-image-card');
+    if (imageUrl && imageCardEl) {
+      mountAsyncMediaPreview(imageCardEl, imageUrl, mediaType);
+    }
+
+    // Reveal the image card with a slide-in from the left once content is ready.
+    if (imageCardEl) {
+      if (!imageUrl) {
+        imageCardEl.classList.add('hidden');
+      } else if (mediaType === 'video' || mediaType === 'gif') {
+        requestAnimationFrame(() => imageCardEl.classList.add('ready'));
+      } else {
+        const img = imageCardEl.querySelector('img');
+        if (img) {
+          const reveal = () => imageCardEl.classList.add('ready');
+          if (img.complete && img.naturalWidth > 0) {
+            requestAnimationFrame(reveal);
+          } else {
+            img.addEventListener('load', reveal, { once: true });
+            img.addEventListener('error', reveal, { once: true });
+            setTimeout(reveal, 3000);
+          }
+        } else {
+          imageCardEl.classList.add('ready');
+        }
       }
-      
-      item.innerHTML = `
-        <span class="tag-name">${displayText}</span>
-        <span class="autocomplete-category">${category}</span>
-      `;
-      
-      // Add click handler to select tag
-      item.addEventListener('click', () => {
-        selectTag(tag);
-      });
-      
-      autocompleteDropdown.appendChild(item);
+    }
+
+    // Wire up references
+    const overlayLayout       = overlay.querySelector('.overlay-layout');
+    const generatePoolIdButton = overlay.querySelector('#generate-pool-id');
+    const poolIdInput         = overlay.querySelector('#pool-id');
+    const poolIndexInput      = overlay.querySelector('#pool-index');
+    const loadLastTagsIdButton = overlay.querySelector('#load-last-tags-id');
+    const loadLastTagsButton  = overlay.querySelector('#load-last-tags');
+    const loadLastIdButton    = overlay.querySelector('#load-last-id');
+    const input               = overlay.querySelector('#tag-input');
+    const tagDisplay          = overlay.querySelector('#tag-display');
+    const autocompleteDropdown = overlay.querySelector('.autocomplete-dropdown');
+
+    // Memory button event listeners
+    loadLastTagsIdButton.addEventListener('click', loadLastTagsAndId);
+    loadLastTagsButton.addEventListener('click', loadLastTagsOnly);
+    loadLastIdButton.addEventListener('click', loadLastIdOnly);
+
+    // Generate pool ID
+    generatePoolIdButton.addEventListener('click', async () => {
+      generatePoolIdButton.disabled = true;
+      const originalLabel = generatePoolIdButton.textContent;
+      generatePoolIdButton.textContent = '...';
+
+      try {
+        const response = await browser.runtime.sendMessage({ action: 'generate-pool-id' });
+        if (response && response.success) {
+          poolIdInput.value = response.poolId;
+          poolIndexInput.value = '0';
+
+          if (response.source === 'client-fallback') {
+            console.warn('Pool ID generated client-side; server was unavailable.');
+          }
+        } else {
+          console.error('Pool generation failed:', response && response.error);
+        }
+      } catch (err) {
+        console.error('Pool generation error:', err);
+        poolIdInput.value = Math.random().toString(36).substring(2, 10);
+        poolIndexInput.value = '0';
+      } finally {
+        generatePoolIdButton.disabled = false;
+        generatePoolIdButton.textContent = originalLabel;
+      }
     });
-    
-    autocompleteDropdown.style.display = 'block';
-    selectedIndex = -1;
-  }
 
-  // Debounce function to limit API calls
-  function debounce(func, wait) {
-    let timeout;
-    return function() {
-      const context = this;
-      const args = arguments;
-      clearTimeout(timeout);
-      timeout = setTimeout(() => func.apply(context, args), wait);
-    };
-  }
-  
-  // Create debounced version of updateAutocompleteSuggestions
-  const debouncedUpdateSuggestions = debounce(updateAutocompleteSuggestions, 200);
-  
-  // Select a tag from autocomplete
-  function selectTag(tag) {
-    // Get existing tags
-    const existingTags = TagPills.getCurrentTagsFromDisplay(tagDisplay);
-    
-    // Only add if not already there
-    if (!existingTags.includes(tag)) {
-      // 🔥 FIXED: Use addTag with proper callbacks instead of re-rendering all
-      TagPills.addTag(
-        tag, 
+    // Manual pool-ID change -> populate next index
+    poolIdInput.addEventListener('change', () => {
+      populateNextPoolIndex(poolIdInput.value);
+    });
+
+    // Focus tag input
+    if (input) {
+      setTimeout(() => input.focus(), 50);
+    } else {
+      console.error('Input field not found!');
+    }
+
+    // Render initial tags
+    if (tagDisplay) {
+      TagPills.renderTagPills(
+        tags,
         tagDisplay,
-        // onDeleteTag callback
         (deletedTag) => {
           console.log(`Tag deleted: ${deletedTag}`);
+          updateTagCount();
         },
-        // onCategoryChange callback
         (oldTag, newTag, newCategory) => {
           console.log(`Tag category changed: ${oldTag} -> ${newTag}`);
         }
       );
+      updateTagCount();
+    } else {
+      console.error('Tag display not found!');
     }
-    
-    // Reset input and dropdown
-    input.value = '';
-    autocompleteDropdown.style.display = 'none';
-    selectedIndex = -1;
-    input.focus();
-  }
-  
-  // Listen for input changes to trigger autocomplete
-  input.addEventListener('input', debouncedUpdateSuggestions);
-  
-  // Handle keyboard events
-  function handleKeydown(e) {
-    // Autocomplete dropdown navigation
-    if (autocompleteDropdown.style.display === 'block') {
-      const items = autocompleteDropdown.querySelectorAll('.autocomplete-item');
-      
-      // Down arrow - move selection down
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        selectedIndex = (selectedIndex + 1) % items.length;
-        highlightSelectedItem(items, selectedIndex);
-      }
-      
-      // Up arrow - move selection up
-      else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        selectedIndex = selectedIndex <= 0 ? items.length - 1 : selectedIndex - 1;
-        highlightSelectedItem(items, selectedIndex);
-      }
-      
-      // Tab or Enter with selection - select current item
-      else if ((e.key === 'Tab' || e.key === 'Enter') && selectedIndex >= 0) {
-        e.preventDefault();
-        
-        const selectedItem = items[selectedIndex];
-        const tagName = selectedItem.querySelector('.tag-name').textContent;
-        const category = selectedItem.querySelector('.autocomplete-category').textContent;
-        
-        const fullTag = category !== 'general' ? `${category}:${tagName}` : tagName;
-        selectTag(fullTag);
+
+    // Track selected item in dropdown
+    let selectedIndex = -1;
+
+    /* ----------- save ----------- */
+
+    function saveData() {
+      if (!tagDisplay) {
+        console.error('Tag display not found when saving!');
         return;
       }
-    }
-    
-    // Regular overlay keyboard shortcuts
-    if (e.key === 'Escape') {
-      // Remove the floating image preview if it exists
-      hideImagePreview();
-      
-      // Close overlay
-      closeOverlay();
-      
-      // Call the cancel callback
-      onCancel();
-    } else if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      
-      // If dropdown is visible but no selection, hide it
-      if (autocompleteDropdown.style.display === 'block' && selectedIndex === -1) {
-        autocompleteDropdown.style.display = 'none';
-      }
-      // Check if this is to add a tag
-      else if (input.value.trim()) {
-        // Get current raw input - split by commas if multiple tags entered at once
-        const newTags = input.value.trim().split(',').map(tag => tag.trim()).filter(tag => tag);
-        
-        // Get existing tags
-        const existingTags = TagPills.getCurrentTagsFromDisplay(tagDisplay);
-        
-        // Add each new tag that doesn't already exist
-        newTags.forEach(tag => {
-          if (!existingTags.includes(tag)) {
-            TagPills.addTag(
-              tag, 
-              tagDisplay,
-              // onDeleteTag callback
-              (deletedTag) => {
-                console.log(`Tag deleted: ${deletedTag}`);
-              },
-              // onCategoryChange callback
-              (oldTag, newTag, newCategory) => {
-                console.log(`Tag category changed: ${oldTag} -> ${newTag}`);
-              }
-            );
+
+      const displayTags = TagPills.getCurrentTagsFromDisplay(tagDisplay);
+      const poolData = poolIdInput.value.trim()
+        ? {
+            poolId: poolIdInput.value.trim(),
+            poolIndex: parseInt(poolIndexInput.value, 10) || 0
           }
+        : null;
+
+      // No-op now (image preview is part of the overlay), but kept for the
+      // contract — content.js may also call this elsewhere.
+      hideImagePreview();
+      closeOverlay();
+      onSave(displayTags, poolData);
+    }
+
+    /* ----------- autocomplete ----------- */
+
+    async function updateAutocompleteSuggestions() {
+      const query = input.value.trim();
+
+      if (query.length < 2) {
+        autocompleteDropdown.classList.remove('show');
+        selectedIndex = -1;
+        return;
+      }
+
+      const cacheKey = query.toLowerCase();
+      const cached = autocompleteCache.get(cacheKey);
+
+      if (cached && (Date.now() - cached.timestamp) < AUTOCOMPLETE_CACHE_TTL) {
+        console.log(`🚀 Local cache hit for: ${query}`);
+        renderSuggestions(cached.data);
+        return;
+      }
+
+      try {
+        console.log(`🔍 Searching server for: ${query}`);
+        const startTime = performance.now();
+
+        const suggestions = await browser.runtime.sendMessage({
+          action: 'search-tags',
+          query: query
         });
-        
-        // Clear input field and add a space for next entry
-        input.value = '';
-        autocompleteDropdown.style.display = 'none';
-      } else {
-        // If input is empty, save the data
-        saveData();
+
+        const duration = performance.now() - startTime;
+        console.log(`📊 Search completed in ${duration.toFixed(1)}ms`);
+
+        if (suggestions && suggestions.length > 0) {
+          autocompleteCache.set(cacheKey, {
+            data: suggestions,
+            timestamp: Date.now()
+          });
+          renderSuggestions(suggestions);
+        } else {
+          autocompleteDropdown.classList.remove('show');
+          selectedIndex = -1;
+        }
+      } catch (error) {
+        console.error('Autocomplete error:', error);
+        autocompleteDropdown.classList.remove('show');
       }
     }
-  }
-  
-  // Highlight selected autocomplete item
-  function highlightSelectedItem(items, index) {
-    items.forEach((item, i) => {
-      item.classList.toggle('selected', i === index);
-    });
-    
-    if (index >= 0) {
-      items[index].scrollIntoView({ block: 'nearest' });
-    }
-  }
-  
-  // Store the listener reference so we can remove it later
-  keydownListener = handleKeydown;
-  
-  // Add keyboard event listener
-  document.addEventListener('keydown', keydownListener);
-  
-  // Close dropdown when clicking outside of it
-  document.addEventListener('click', (e) => {
-    if (!autocompleteDropdown.contains(e.target) && e.target !== input) {
-      autocompleteDropdown.style.display = 'none';
+
+    function renderSuggestions(suggestions) {
+      autocompleteDropdown.innerHTML = '';
+
+      suggestions.forEach((tag) => {
+        const item = document.createElement('div');
+        item.className = 'autocomplete-item';
+
+        // Format tag display (category:name)
+        let displayText = tag;
+        let category = 'general';
+
+        if (tag.includes(':')) {
+          const [cat, name] = tag.split(':', 2);
+          category = cat;
+          displayText = name;
+        }
+
+        item.innerHTML = `
+          <span class="name">${displayText}</span>
+          <span class="autocomplete-category">${category}</span>
+        `;
+
+        item.addEventListener('click', () => {
+          selectTag(tag);
+        });
+
+        autocompleteDropdown.appendChild(item);
+      });
+
+      autocompleteDropdown.classList.add('show');
       selectedIndex = -1;
     }
-  });
-  
-  // Close overlay when clicking outside
-  overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) {
-      // Remove the floating image preview if it exists
-      hideImagePreview();
-      
-      // Close overlay
-      closeOverlay();
-      
-      // Call the cancel callback
-      onCancel();
+
+    function debounce(func, wait) {
+      let timeout;
+      return function() {
+        const context = this;
+        const args = arguments;
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(context, args), wait);
+      };
     }
-  });
-  
-  return overlay;
-}
+
+    const debouncedUpdateSuggestions = debounce(updateAutocompleteSuggestions, 200);
+
+    /* ----------- tag selection ----------- */
+
+    function selectTag(tag) {
+      const existingTags = TagPills.getCurrentTagsFromDisplay(tagDisplay);
+
+      if (!existingTags.includes(tag)) {
+        TagPills.addTag(
+          tag,
+          tagDisplay,
+          (deletedTag) => {
+            console.log(`Tag deleted: ${deletedTag}`);
+            updateTagCount();
+          },
+          (oldTag, newTag, newCategory) => {
+            console.log(`Tag category changed: ${oldTag} -> ${newTag}`);
+          },
+          { prepend: true }
+        );
+        updateTagCount();
+      }
+
+      input.value = '';
+      autocompleteDropdown.classList.remove('show');
+      selectedIndex = -1;
+      input.focus();
+    }
+
+    input.addEventListener('input', debouncedUpdateSuggestions);
+
+    /* ----------- keyboard ----------- */
+
+    function handleKeydown(e) {
+      // Autocomplete dropdown navigation
+      if (autocompleteDropdown.classList.contains('show')) {
+        const items = autocompleteDropdown.querySelectorAll('.autocomplete-item');
+
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          selectedIndex = (selectedIndex + 1) % items.length;
+          highlightSelectedItem(items, selectedIndex);
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          selectedIndex = selectedIndex <= 0 ? items.length - 1 : selectedIndex - 1;
+          highlightSelectedItem(items, selectedIndex);
+        } else if ((e.key === 'Tab' || e.key === 'Enter') && selectedIndex >= 0) {
+          e.preventDefault();
+
+          const selectedItem = items[selectedIndex];
+          const tagName = selectedItem.querySelector('.name').textContent;
+          const category = selectedItem.querySelector('.autocomplete-category').textContent;
+
+          const fullTag = category !== 'general' ? `${category}:${tagName}` : tagName;
+          selectTag(fullTag);
+          return;
+        }
+      }
+
+      // Regular overlay keyboard shortcuts
+      if (e.key === 'Escape') {
+        hideImagePreview();
+        closeOverlay();
+        onCancel();
+      } else if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+
+        if (autocompleteDropdown.classList.contains('show') && selectedIndex === -1) {
+          autocompleteDropdown.classList.remove('show');
+        } else if (input.value.trim()) {
+          // Add new tags from input — split by commas
+          const newTags = input.value.trim().split(',').map((t) => t.trim()).filter(Boolean);
+          const existingTags = TagPills.getCurrentTagsFromDisplay(tagDisplay);
+
+          newTags.forEach((tag) => {
+            if (!existingTags.includes(tag)) {
+              TagPills.addTag(
+                tag,
+                tagDisplay,
+                (deletedTag) => {
+                  console.log(`Tag deleted: ${deletedTag}`);
+                  updateTagCount();
+                },
+                (oldTag, newTag, newCategory) => {
+                  console.log(`Tag category changed: ${oldTag} -> ${newTag}`);
+                },
+                { prepend: true }
+              );
+            }
+          });
+          updateTagCount();
+
+          input.value = '';
+          autocompleteDropdown.classList.remove('show');
+        } else {
+          // Empty input -> save
+          saveData();
+        }
+      }
+    }
+
+    function highlightSelectedItem(items, index) {
+      items.forEach((item, i) => {
+        item.classList.toggle('selected', i === index);
+      });
+
+      if (index >= 0) {
+        items[index].scrollIntoView({ block: 'nearest' });
+      }
+    }
+
+    keydownListener = handleKeydown;
+    document.addEventListener('keydown', keydownListener);
+
+    // Close dropdown when clicking outside of it
+    document.addEventListener('click', (e) => {
+      if (!autocompleteDropdown.contains(e.target) && e.target !== input) {
+        autocompleteDropdown.classList.remove('show');
+        selectedIndex = -1;
+      }
+    });
+
+    // Close overlay when clicking the dimmed area. The .overlay-layout now
+    // fills the backdrop horizontally (width: 100% in styles.js), so clicks
+    // on its empty padding land on overlay-layout, not overlay. Accept both.
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay || e.target === overlayLayout) {
+        hideImagePreview();
+        closeOverlay();
+        onCancel();
+      }
+    });
+
+    return overlay;
+  }
+
+  /* ---------------------------------------------------------------
+   *  Lifecycle
+   * ------------------------------------------------------------- */
 
   /**
    * Close the overlay if it's open
    */
   function closeOverlay() {
-    console.log("closeOverlay called, overlayElement exists:", !!overlayElement);
-    
+    console.log('closeOverlay called, overlayElement exists:', !!overlayElement);
+
     if (overlayElement) {
-      // Remove event listener
       if (keydownListener) {
-        console.log("Removing keyboard event listener");
+        console.log('Removing keyboard event listener');
         document.removeEventListener('keydown', keydownListener);
         keydownListener = null;
       }
-      
+
       // Animate out
       overlayElement.style.opacity = 0;
       overlayElement.style.transform = 'translateY(-10px)';
-      
-      // Remove after animation
+
+      // Capture in a local so the closure doesn't NPE if a new overlay opens
+      // before the timeout fires.
+      const el = overlayElement;
+      overlayElement = null;
       setTimeout(() => {
-        console.log("Removing overlay from DOM");
-        overlayElement.remove();
-        overlayElement = null;
+        console.log('Removing overlay from DOM');
+        if (el && el.parentNode) el.parentNode.removeChild(el);
       }, 200);
     }
   }
 
   /**
-   * Hide and remove image preview if it exists
+   * Hide and remove image preview if it exists.
+   *
+   * Kept as a no-op for backwards compatibility — the image preview is now
+   * part of the overlay (inside .image-card), so it gets cleaned up when
+   * closeOverlay() removes the overlay root. But content.js calls this
+   * independently in a few places, so we keep the function exported.
    */
   function hideImagePreview() {
-    console.log("hideImagePreview called, imagePreviewElement exists:", !!imagePreviewElement);
-    
-    if (imagePreviewElement) {
-      imagePreviewElement.style.opacity = 0;
-      setTimeout(() => {
-        console.log("Removing image preview from DOM");
-        imagePreviewElement.remove();
-        imagePreviewElement = null;
-      }, 200);
-    }
+    // intentional no-op
   }
 
   /**
@@ -802,60 +831,58 @@ function createOverlay(options = {}) {
     return overlayElement !== null;
   }
 
-    /**
-   * Show a duplicate warning in the overlay
-   * @param {Object} originalRecord - The original record that was found as a duplicate
-   * @param {boolean} exactMatch - Whether this is an exact match or just similar
+  /* ---------------------------------------------------------------
+   *  Duplicate warning
+   * ------------------------------------------------------------- */
+
+  /**
+   * Show a duplicate warning floating above the overlay panel.
+   *
+   * @param {Object} originalRecord - The original record that was found as a duplicate.
+   *                                  Currently unused in the new design (date / tag
+   *                                  list aren't shown), but kept on the signature
+   *                                  for caller compat.
+   * @param {boolean} exactMatch - Whether this is an exact match or just similar.
+   * @param {number} [hammingDistance] - Optional hamming distance between the
+   *                                     current image and the existing one. When
+   *                                     provided, shown as the secondary line.
+   *                                     When not, falls back to "exact match" /
+   *                                     "similar match" wording.
    */
-    function showDuplicateWarning(originalRecord, exactMatch) {
-      console.log("Showing duplicate warning", originalRecord, exactMatch);
-      
-      if (!overlayElement) {
-        console.error("Cannot show duplicate warning - overlay not active");
-        return;
-      }
-      
-      // Check if warning already exists and remove it
-      const existingWarning = overlayElement.querySelector('.duplicate-warning');
-      if (existingWarning) {
-        existingWarning.remove();
-      }
-      
-      const warningContainer = document.createElement('div');
-      warningContainer.className = 'duplicate-warning';
-      
-      const warningMessage = exactMatch ? 
-        'This image appears to be an exact duplicate of one you already saved!' :
-        'This image appears to be very similar to one you already saved!';
-      
-      const warningDate = new Date(originalRecord.timestamp).toLocaleString();
-      
-      warningContainer.innerHTML = `
-        <div class="warning-icon">⚠️</div>
-        <div class="warning-message">
-          <strong>${warningMessage}</strong>
-          <p>Previously saved on ${warningDate}</p>
-          <div class="warning-tags">
-            Tags: ${originalRecord.tags.slice(0, 5).join(', ')}${originalRecord.tags.length > 5 ? '...' : ''}
-          </div>
-        </div>
-        <div class="warning-actions">
-          <button class="warning-action save-anyway">Save Anyway</button>
-          <button class="warning-action cancel">Cancel</button>
-        </div>
-      `;
-      
-      overlayElement.querySelector('.overlay-content').prepend(warningContainer);
-      
-      // Add event listeners
-      warningContainer.querySelector('.save-anyway').addEventListener('click', () => {
-        warningContainer.remove();
-      });
-      
-      warningContainer.querySelector('.cancel').addEventListener('click', () => {
-        closeOverlay();
-      });
+  function showDuplicateWarning(originalRecord, exactMatch, hammingDistance) {
+    console.log('Showing duplicate warning', originalRecord, exactMatch, hammingDistance);
+
+    if (!overlayElement) {
+      console.error('Cannot show duplicate warning - overlay not active');
+      return;
     }
+
+    const warning = overlayElement.querySelector('#duplicate-warning');
+    if (!warning) {
+      console.error('Duplicate-warning slot not found in overlay');
+      return;
+    }
+
+    const headline = exactMatch
+      ? 'Exact duplicate already saved'
+      : 'Similar image already saved';
+
+    let metaHtml;
+    if (typeof hammingDistance === 'number' && Number.isFinite(hammingDistance)) {
+      metaHtml = `Hamming distance: <code>${hammingDistance}</code>`;
+    } else {
+      metaHtml = exactMatch ? 'Exact match' : 'Similar match';
+    }
+
+    warning.innerHTML = `
+      <div class="icon">${ICON_WARNING_TRIANGLE}</div>
+      <div class="body">
+        <strong>${headline}</strong>
+        <span class="meta">${metaHtml}</span>
+      </div>
+    `;
+    warning.classList.remove('hidden');
+  }
 
   return {
     initOverlay,

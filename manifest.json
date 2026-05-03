@@ -8,7 +8,12 @@
     "activeTab",
     "storage",
     "downloads",
-    "contextMenus"
+    "contextMenus",
+    "declarativeNetRequest",
+    "declarativeNetRequestWithHostAccess"
+  ],
+  "host_permissions": [
+    "*://*.pximg.net/*"
   ],
   "background": {
     "scripts": ["background.js"]
@@ -30,6 +35,13 @@
       },
       "description": "Open tag saver overlay or image picker"
     }
+  },
+  "declarative_net_request": {
+    "rule_resources": [{
+      "id": "pixiv-referer",
+      "enabled": true,
+      "path": "rules/pixiv-referer.json"
+    }]
   },
   "content_scripts": [
     {

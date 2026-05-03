@@ -919,32 +919,24 @@ class BatchUploader {
   }
 
   async saveImageData(data) {
-    return new Promise((resolve, reject) => {
-      // Create a blob URL for the file
-      const blob = new Blob([data.fileData], { type: data.fileData.type });
-      const url = URL.createObjectURL(blob);
-      
-      const finalData = {
-        ...data,
-        blobUrl: url,
-        fileData: null // Remove file object since it can't be serialized
-      };
-      
-      browser.runtime.sendMessage({
-        action: "save-batch-image",
-        data: finalData
-      }).then(response => {
-        URL.revokeObjectURL(url); // Clean up
-        if (response && response.success) {
-          resolve(response);
-        } else {
-          reject(new Error(response?.error || 'Unknown error'));
-        }
-      }).catch(error => {
-        URL.revokeObjectURL(url); // Clean up on error
-        reject(error);
-      });
+    // The File object IS a Blob — sendMessage will serialize it through
+    // structured cloning. No blob URLs needed; the new server endpoint
+    // takes raw bytes via FormData.
+    const finalData = {
+      ...data,
+      fileBlob: data.fileData,  // rename for clarity in handleSaveBatchImage
+      fileData: null,            // not needed downstream; keeps payload lean
+    };
+
+    const response = await browser.runtime.sendMessage({
+      action: "save-batch-image",
+      data: finalData,
     });
+
+    if (response && response.success) {
+      return response;
+    }
+    throw new Error(response?.error || 'Unknown error');
   }
 
   updateProgress(percent, text) {

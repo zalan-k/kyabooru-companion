@@ -641,6 +641,32 @@ async function uploadCurrentImageToBooru() {
   }
 }
 
+/**
+ * Subscribe to staging events. Returns the EventSource instance so
+ * the caller can close it. Auto-reconnects on drop (EventSource does
+ * this natively; if you want exponential backoff you'd wrap it).
+ */
+function openStagingEventStream({ onImageSaved, onError } = {}) {
+  const url = `${API_BASE}/api/staging/events`;
+  const es = new EventSource(url);
+
+  es.addEventListener('image-saved', (e) => {
+    try {
+      const image = JSON.parse(e.data);
+      onImageSaved?.(image);
+    } catch (err) {
+      console.error('SSE image-saved parse error:', err);
+    }
+  });
+
+  es.addEventListener('error', (err) => {
+    console.warn('SSE error (will auto-reconnect):', err);
+    onError?.(err);
+  });
+
+  return es;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   const uploadAllBtn = document.getElementById('upload-to-booru-btn');
   if (uploadAllBtn) uploadAllBtn.addEventListener('click', startBooruUploadAll);
