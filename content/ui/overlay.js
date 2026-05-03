@@ -19,6 +19,48 @@ window.TagSaver.UI.Overlay = (function() {
   let keydownListener = null; // Track the event listener globally
 
   /**
+   * Look up the highest index for a pool and write `highest + 1` into the
+   * overlay's index input. Used by both the manual change handler and the
+   * "load last pool ID" buttons. Returns the resolved next-index for callers
+   * that want it.
+   */
+  async function populateNextPoolIndex(poolId) {
+    if (!overlayElement) return null;
+    const poolIndexInput = overlayElement.querySelector('#pool-index');
+    if (!poolIndexInput) return null;
+
+    const trimmed = (poolId || '').trim();
+    if (!trimmed) return null;
+
+    poolIndexInput.placeholder = 'Loading...';
+    poolIndexInput.disabled = true;
+
+    try {
+      const result = await browser.runtime.sendMessage({
+        action: 'get-pool-highest-index',
+        poolId: trimmed,
+      });
+
+      let nextIndex;
+      if (result && result.success && result.highestIndex !== null && result.highestIndex !== undefined) {
+        nextIndex = result.highestIndex + 1;
+      } else {
+        nextIndex = 0; // pool not seen before -> start at 0
+      }
+
+      poolIndexInput.value = String(nextIndex);
+      return nextIndex;
+    } catch (error) {
+      console.error('Error getting pool index:', error);
+      poolIndexInput.value = '0';
+      return null;
+    } finally {
+      poolIndexInput.placeholder = 'Position in pool';
+      poolIndexInput.disabled = false;
+    }
+  }
+
+  /**
    * Initialize the overlay component
    */
   function initOverlay() {
@@ -52,7 +94,7 @@ window.TagSaver.UI.Overlay = (function() {
 /**
    * Load last saved tags and ID into the overlay
    */
-  function loadLastTagsAndId() {
+  async function loadLastTagsAndId() {
     const lastData = loadLastSavedData();
     if (!lastData) {
       Toast.showError("No previously saved data found");
@@ -85,9 +127,12 @@ window.TagSaver.UI.Overlay = (function() {
       const poolIdInput = overlayElement.querySelector('#pool-id');
       if (poolIdInput) {
         poolIdInput.value = lastData.poolId;
-        // Trigger the change event to auto-populate the index
-        poolIdInput.dispatchEvent(new Event('change'));
-        Toast.showSuccess(`Loaded pool ID: ${lastData.poolId}`);
+        const nextIndex = await populateNextPoolIndex(lastData.poolId);
+        if (nextIndex !== null) {
+          Toast.showSuccess(`Loaded pool ${lastData.poolId} (next index: ${nextIndex})`);
+        } else {
+          Toast.showSuccess(`Loaded pool ID: ${lastData.poolId}`);
+        }
       }
     }
 
@@ -99,7 +144,7 @@ window.TagSaver.UI.Overlay = (function() {
   /**
    * Load only the last saved pool ID into the overlay
    */
-  function loadLastIdOnly() {
+  async function loadLastIdOnly() {
     const lastData = loadLastSavedData();
     if (!lastData || !lastData.poolId) {
       Toast.showError("No pool ID found in memory");
@@ -107,10 +152,14 @@ window.TagSaver.UI.Overlay = (function() {
     }
 
     const poolIdInput = overlayElement.querySelector('#pool-id');
-    if (poolIdInput) {
-      poolIdInput.value = lastData.poolId;
-      // Trigger the change event to auto-populate the index
-      poolIdInput.dispatchEvent(new Event('change'));
+    if (!poolIdInput) return;
+
+    poolIdInput.value = lastData.poolId;
+    const nextIndex = await populateNextPoolIndex(lastData.poolId);
+
+    if (nextIndex !== null) {
+      Toast.showSuccess(`Loaded pool ${lastData.poolId} (next index: ${nextIndex})`);
+    } else {
       Toast.showSuccess(`Loaded pool ID: ${lastData.poolId}`);
     }
   }
@@ -363,40 +412,8 @@ function createOverlay(options = {}) {
     }
   });
 
-  poolIdInput.addEventListener('change', async () => {
-    if (!poolIdInput.value.trim()) return;
-    
-    // Show loading state
-    poolIndexInput.placeholder = 'Loading...';
-    poolIndexInput.disabled = true;
-    
-    try {
-      console.log('🔄 Fetching pool index...');
-      const startTime = performance.now();
-      
-      // Get the highest index in this pool
-      const result = await browser.runtime.sendMessage({
-        action: 'get-pool-highest-index',
-        poolId: poolIdInput.value.trim()
-      });
-      
-      const duration = performance.now() - startTime;
-      console.log(`📊 Pool index fetched in ${duration.toFixed(1)}ms`);
-      
-      // Set next available index
-      if (result.success && result.highestIndex !== null) {
-        poolIndexInput.value = result.highestIndex + 1;
-      } else {
-        // Default to 0 for a new pool
-        poolIndexInput.value = '0';
-      }
-    } catch (error) {
-      console.error('Error getting pool index:', error);
-      poolIndexInput.value = '0';
-    } finally {
-      poolIndexInput.placeholder = 'Position in pool';
-      poolIndexInput.disabled = false;
-    }
+  poolIdInput.addEventListener('change', () => {
+    populateNextPoolIndex(poolIdInput.value);
   });
 
   if (input) {

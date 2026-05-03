@@ -163,6 +163,98 @@
       });
     });
 
+    // ============================================
+    // UPLOAD FILTER DROPDOWN (mirrors sort dropdown)
+    // ============================================
+    const uploadFilterContainer = document.getElementById('upload-filter-container');
+    const uploadFilterDropdown = document.getElementById('upload-filter-dropdown');
+
+    function showUploadFilterDropdown() {
+      const rect = uploadFilterContainer.getBoundingClientRect();
+      uploadFilterDropdown.style.top = (rect.bottom + 6) + 'px';
+      uploadFilterDropdown.style.left = rect.left + 'px';
+      uploadFilterDropdown.classList.add('show');
+    }
+
+    function hideUploadFilterDropdown() {
+      uploadFilterDropdown.classList.remove('show');
+    }
+
+    function updateUploadFilterIcon() {
+      uploadFilterContainer.dataset.state = currentUploadFilter;
+      document.querySelectorAll('.upload-filter-icon').forEach(svg => {
+        svg.style.display = svg.dataset.state === currentUploadFilter ? '' : 'none';
+      });
+    }
+
+    uploadFilterContainer.addEventListener('mouseenter', showUploadFilterDropdown);
+    uploadFilterContainer.addEventListener('mouseleave', () => {
+      setTimeout(() => {
+        if (!uploadFilterContainer.matches(':hover') && !uploadFilterDropdown.matches(':hover')) {
+          hideUploadFilterDropdown();
+        }
+      }, 100);
+    });
+    uploadFilterDropdown.addEventListener('mouseenter', () => uploadFilterDropdown.classList.add('show'));
+    uploadFilterDropdown.addEventListener('mouseleave', () => {
+      setTimeout(() => {
+        if (!uploadFilterContainer.matches(':hover') && !uploadFilterDropdown.matches(':hover')) {
+          hideUploadFilterDropdown();
+        }
+      }, 100);
+    });
+    document.addEventListener('click', (e) => {
+      if (!uploadFilterContainer.contains(e.target) && !uploadFilterDropdown.contains(e.target)) {
+        hideUploadFilterDropdown();
+      }
+    });
+    document.getElementById('images-scroll-container').addEventListener('scroll', hideUploadFilterDropdown);
+
+    // Filter selections
+    uploadFilterDropdown.querySelectorAll('.dropdown-item[data-value]').forEach(item => {
+      item.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        currentUploadFilter = item.dataset.value;
+        updateUploadFilterIcon();
+        hideUploadFilterDropdown();
+        imagesOffset = 0;
+        loadImages(true);
+      });
+    });
+
+    // Initialize icon to whatever currentUploadFilter starts as
+    updateUploadFilterIcon();
+
+    // ============================================
+    // FROSTING TOGGLE (in-dropdown, persists in localStorage)
+    // ============================================
+    const FROSTING_KEY = 'staging.frostingEnabled';
+    const frostingToggle = document.getElementById('frosting-toggle-item');
+
+    function isFrostingEnabled() {
+      return localStorage.getItem(FROSTING_KEY) !== 'false'; // default: on
+    }
+
+    function applyFrostingState() {
+      const on = isFrostingEnabled();
+      document.body.classList.toggle('frosting-disabled', !on);
+      if (frostingToggle) frostingToggle.dataset.state = on ? 'on' : 'off';
+    }
+
+    frostingToggle.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const next = !isFrostingEnabled();
+      localStorage.setItem(FROSTING_KEY, String(next));
+      applyFrostingState();
+      // Don't close the dropdown — user can see the change immediately;
+      // hover-out closes it naturally.
+    });
+
+    // Apply on load
+    applyFrostingState();
+
     // Dropdown toggle for import menu (new design)
     const importBtn = document.getElementById('import-btn');
     const importDropdown = document.getElementById('import-dropdown');
@@ -441,23 +533,25 @@ function renderImages(newImages) {
 
   newImages.forEach(img => {
     const card = document.createElement('div');
-    card.className = 'image-card' + (img.booruPostId ? ' uploaded' : '');
+    // 'uploaded' state = sent to booru (regardless of whether a post was created).
+    // Both successful posts and duplicate-skipped images get the frosted look.
+    const isOnBooru = img.booruPostState === 'posted' || img.booruPostState === 'duplicate';
+    card.className = 'image-card' + (isOnBooru ? ' uploaded' : '');
     card.dataset.id = img.id;
     card.addEventListener('click', (e) => handleCardClick(img.id, e));
 
-    const booruOverlay = img.booruPostId ? `
-      <a class="booru-frost-icon-link"
-        href="${img.booruPublicUrl}"
-        target="_blank"
-        rel="noopener"
-        title="View on booru (post #${img.booruPostId})">
+    const booruOverlay = isOnBooru ? `
+      <a class="booru-frost-icon-link${img.booruPostState === 'duplicate' ? ' no-link' : ''}
+        ${img.booruPostState === 'posted' ? `href="${img.booruPublicUrl}" target="_blank" rel="noopener"` : ''}
+        title="${img.booruPostState === 'posted'
+          ? `View on booru (post #${img.booruPostId})`
+          : 'Already on booru (duplicate — no post id available)'}">
         <svg class="booru-frost-icon" viewBox="0 0 24 24" fill="none"
             stroke="none" stroke-width="1.5"
             stroke-linecap="round" stroke-linejoin="round">
           <path fill-rule="evenodd" clip-rule="evenodd" d="M17.4975 18.4851L20.6281 9.09378C21.419 6.72107 21.9594 5.1 21.9978 3.97919C22.0108 3.60165 21.5845 3.47624 21.3173 3.74336L6.85855 18.2022C6.62519 18.4355 6.6807 18.8286 6.99826 18.9185C7.02946 18.9273 7.0609 18.9356 7.09257 18.9433C7.59254 19.0657 8.24578 18.977 9.5522 18.7997L9.62363 18.79C9.99191 18.74 10.1761 18.715 10.3529 18.7257C10.6738 18.7451 10.9838 18.8496 11.251 19.0286C11.3981 19.1271 11.5295 19.2586 11.7923 19.5213L12.0436 19.7726C13.5539 21.2828 14.309 22.0379 15.1101 21.9986C15.3309 21.9877 15.5479 21.9365 15.7503 21.8475C16.4844 21.5244 16.8221 20.5113 17.4975 18.4851Z" fill="currentColor"/>
           <path d="M14.906 3.37194L5.57477 6.48223C3.49295 7.17615 2.45203 7.5231 2.13608 8.28642C2.06182 8.46582 2.01692 8.65601 2.00311 8.84968C1.94433 9.6737 2.72018 10.4495 4.27188 12.0012L4.55451 12.2838C4.80921 12.5385 4.93655 12.6658 5.03282 12.8076C5.22269 13.0871 5.33046 13.4143 5.34393 13.752C5.35076 13.9232 5.32403 14.1013 5.27057 14.4575C5.07488 15.7613 4.97703 16.4131 5.0923 16.9148C5.09632 16.9322 5.1005 16.9497 5.10484 16.967C5.18629 17.292 5.58551 17.3539 5.82242 17.117L20.2567 2.68271C20.5238 2.41559 20.3984 1.9893 20.0209 2.00224C18.9 2.04066 17.2788 2.58102 14.906 3.37194Z" fill="currentColor"/>
         </svg>
-        
       </a>
     ` : '';
 
@@ -730,13 +824,13 @@ function renderImages(newImages) {
       return;
     }
 
-    // Hidden file input — created on demand to avoid polluting HTML
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'application/json,.json';
     input.onchange = async () => {
       const file = input.files && input.files[0];
       if (!file) return;
+
       let body;
       try {
         const text = await file.text();
@@ -754,24 +848,24 @@ function renderImages(newImages) {
         return;
       }
 
-      showSpinner(`Canonizing ${name.toLowerCase()}...`);
       try {
-        const res = await fetch(`${API_BASE}/api/config/${type}/canonize`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
-        const result = await res.json();
-        if (!res.ok) throw new Error(result.error || `HTTP ${res.status}`);
+        const result = await withDeferredSpinner(
+          `Canonizing ${name.toLowerCase()}...`,
+          async () => {
+            const res = await fetch(`${API_BASE}/api/config/${type}/canonize`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(body),
+            });
+            const r = await res.json();
+            if (!res.ok) throw new Error(r.error || `HTTP ${res.status}`);
+            return r;
+          }
+        );
 
-        hideSpinner();
         alert(`${name} canonized — loaded ${result.count} entries.`);
-
-        // Reload the relevant tab so the UI shows fresh data.
-        // Adapt this to whatever functions reload your panels:
         await loadConfig();
       } catch (err) {
-        hideSpinner();
         alert(`Canonize failed: ${err.message}`);
       }
     };
@@ -783,41 +877,94 @@ function renderImages(newImages) {
   // ============================================================
 
   async function refreshCurrentImage() {
-    if (selectedIds.size !== 1) return;
-    const id = [...selectedIds][0];
-    if (!id) return;
+    if (selectedIds.size === 0) return;
+    const ids = [...selectedIds];
 
-    showSpinner('Refreshing transformations...');
     try {
-      const res = await fetch(`${API_BASE}/api/staging/images/${encodeURIComponent(id)}/refresh`, { method: 'POST' });
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.error || `HTTP ${res.status}`);
-      hideSpinner();
-      if (result.changed) await loadSidebarSingle(id);
+      const summary = await withDeferredSpinner(
+        ids.length === 1 ? 'Refreshing transformations...' : `Refreshing ${ids.length} images...`,
+        async () => {
+          const res = await fetch(`${API_BASE}/api/staging/images/refresh-batch`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids }),
+          });
+          const result = await res.json();
+          if (!res.ok) throw new Error(result.error || `HTTP ${res.status}`);
+          return result;
+        }
+      );
+
+      // Update tag-count badges in place for changed images (no full reload)
+      for (const r of summary.results) {
+        if (!r.success) continue;
+        const card = document.querySelector(`.image-card[data-id="${r.id}"]`);
+        if (card) {
+          const badge = card.querySelector('.tag-count-badge');
+          if (badge && typeof r.tagCount === 'number') {
+            badge.textContent = `${r.tagCount} tags`;
+          }
+        }
+      }
+
+      // If single-select, reload sidebar to reflect new tags
+      if (selectedIds.size === 1) {
+        await loadSidebarSingle([...selectedIds][0]);
+      }
+
+      if (summary.failed > 0) {
+        showToast(`Refreshed ${summary.succeeded}/${summary.total} (${summary.failed} failed)`, 'warning');
+      } else if (summary.changed === 0) {
+        showToast('No changes — already canonical');
+      } else {
+        showToast(`Refreshed ${summary.changed} image${summary.changed === 1 ? '' : 's'}`);
+      }
     } catch (err) {
-      hideSpinner();
-      alert(`Refresh failed: ${err.message}`);
+      showToast(`Refresh failed: ${err.message}`, 'error');
     }
   }
 
   async function rescanCurrentImage() {
-    if (selectedIds.size !== 1) return;
-    const id = [...selectedIds][0];
-    if (!id) return;
+    if (selectedIds.size === 0) return;
+    const ids = [...selectedIds];
 
-    showSpinner('Rescanning sidecar...');
     try {
-      const res = await fetch(`${API_BASE}/api/staging/images/${encodeURIComponent(id)}/rescan`, { method: 'POST' });
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.error || `HTTP ${res.status}`);
-      hideSpinner();
+      const summary = await withDeferredSpinner(
+        ids.length === 1 ? 'Rescanning sidecar...' : `Rescanning ${ids.length} sidecars...`,
+        async () => {
+          const res = await fetch(`${API_BASE}/api/staging/images/rescan-batch`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids }),
+          });
+          const result = await res.json();
+          if (!res.ok) throw new Error(result.error || `HTTP ${res.status}`);
+          return result;
+        }
+      );
 
-      // Reload sidebar with fresh data
-      await loadSidebarSingle(id);
+      for (const r of summary.results) {
+        if (!r.success) continue;
+        const card = document.querySelector(`.image-card[data-id="${r.id}"]`);
+        if (card) {
+          const badge = card.querySelector('.tag-count-badge');
+          if (badge && typeof r.tagCount === 'number') {
+            badge.textContent = `${r.tagCount} tags`;
+          }
+        }
+      }
+
+      if (selectedIds.size === 1) {
+        await loadSidebarSingle([...selectedIds][0]);
+      }
+
+      if (summary.failed > 0) {
+        showToast(`Rescanned ${summary.succeeded}/${summary.total} (${summary.failed} failed)`, 'warning');
+      } else {
+        showToast(`Rescanned ${summary.succeeded} image${summary.succeeded === 1 ? '' : 's'}`);
+      }
     } catch (err) {
-      hideSpinner();
-      console.error('RESCAN:', err.name, err.message, err.stack, err);
-      alert(`Rescan failed: ${err.message}`);
+      showToast(`Rescan failed: ${err.message}`, 'error');
     }
   }
 
@@ -834,12 +981,16 @@ function renderImages(newImages) {
       return;
     }
 
-    showSpinner('Refreshing all images... this may take a while.');
     try {
-      const res = await fetch(`${API_BASE}/api/staging/refresh-all`, { method: 'POST' });
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.error || `HTTP ${res.status}`);
-      hideSpinner();
+      const result = await withDeferredSpinner(
+        'Refreshing all images... this may take a while.',
+        async () => {
+          const res = await fetch(`${API_BASE}/api/staging/refresh-all`, { method: 'POST' });
+          const r = await res.json();
+          if (!res.ok) throw new Error(r.error || `HTTP ${res.status}`);
+          return r;
+        }
+      );
 
       alert(
         `Refresh complete.\n\n` +
@@ -850,10 +1001,8 @@ function renderImages(newImages) {
         `Elapsed: ${(result.elapsed / 1000).toFixed(1)}s`
       );
 
-      // Reload the grid since some images may have moved sort positions
       await loadImages(true);
     } catch (err) {
-      hideSpinner();
       alert(`Refresh-all failed: ${err.message}`);
     }
   }
@@ -868,12 +1017,16 @@ function renderImages(newImages) {
       return;
     }
 
-    showSpinner('Rebuilding index... this may take a while.');
     try {
-      const res = await fetch(`${API_BASE}/api/staging/rebuild`, { method: 'POST' });
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.error || `HTTP ${res.status}`);
-      hideSpinner();
+      const result = await withDeferredSpinner(
+        'Rebuilding index... this may take a while.',
+        async () => {
+          const res = await fetch(`${API_BASE}/api/staging/rebuild`, { method: 'POST' });
+          const r = await res.json();
+          if (!res.ok) throw new Error(r.error || `HTTP ${res.status}`);
+          return r;
+        }
+      );
 
       alert(
         `Rebuild complete.\n\n` +
@@ -884,7 +1037,6 @@ function renderImages(newImages) {
 
       await loadImages(true);
     } catch (err) {
-      hideSpinner();
       alert(`Rebuild failed: ${err.message}`);
     }
   }
@@ -895,6 +1047,24 @@ function renderImages(newImages) {
   //
   // If your UI already has a global spinner / overlay, replace these
   // with your existing functions. Otherwise this creates a minimal one.
+
+  /**
+   * Run async work with a spinner that only appears if the work
+   * takes longer than `delay` ms. Avoids the 100ms flash on fast ops.
+   */
+  async function withDeferredSpinner(message, work, delay = 500) {
+    let shown = false;
+    const timer = setTimeout(() => {
+      showSpinner(message);
+      shown = true;
+    }, delay);
+    try {
+      return await work();
+    } finally {
+      clearTimeout(timer);
+      if (shown) hideSpinner();
+    }
+  }
 
   function showSpinner(message) {
     let overlay = document.getElementById('global-spinner-overlay');
@@ -921,131 +1091,163 @@ function renderImages(newImages) {
   // ============================================
   // ALIASES TAB
   // ============================================
-  const ALIASES_PAGE_SIZE = 50;
-  let aliasesCurrentPage = 0;
-  function renderAliases() {
-    const container = document.getElementById('aliases-list');
-    const emptyState = document.getElementById('aliases-empty');
-    const filter = document.getElementById('aliases-filter')?.value.toLowerCase() || '';
-    
-    container.innerHTML = '';
-
-    let aliasEntries = Object.entries(config.aliases || {});
-
+  const ALIASES_BATCH_SIZE = 50;
+  let aliasesAllEntries = [];   // current filtered set, in display order
+  let aliasesRenderedCount = 0; // how many of those have been appended to DOM
+  let aliasesAppending = false; // re-entrancy guard
+  
+  function getFilteredAliasEntries() {
+    let entries = Object.entries(config.aliases || {});
+    const filter = (document.getElementById('aliases-filter')?.value || '').toLowerCase();
     if (filter) {
-      aliasEntries = aliasEntries.filter(([canonical, data]) => {
+      entries = entries.filter(([canonical, data]) => {
         const canonicalMatch = canonical.toLowerCase().includes(filter);
         const variantMatch = (data.variants || []).some(v => v.toLowerCase().includes(filter));
         return canonicalMatch || variantMatch;
       });
     }
-
-    if (aliasEntries.length === 0) {
-      emptyState.style.display = 'block';
-      document.getElementById('aliases-pager')?.style.setProperty('display', 'none');
-      return;
-    }
-
-    emptyState.style.display = 'none';
-    // Paginate
-    const totalPages = Math.ceil(aliasEntries.length / ALIASES_PAGE_SIZE);
-    if (aliasesCurrentPage >= totalPages) aliasesCurrentPage = Math.max(0, totalPages - 1);
-    const start = aliasesCurrentPage * ALIASES_PAGE_SIZE;
-    const pageEntries = aliasEntries.slice(start, start + ALIASES_PAGE_SIZE);
-    
-    pageEntries.forEach(([canonicalKey, data]) => {
-      const { category: canonicalCat, name: canonicalName } = parseTag(canonicalKey);
-      const effectiveCategory = data.category || canonicalCat || 'general';
-      
-      const card = document.createElement('div');
-      card.className = 'alias-card';
-      card.dataset.canonical = canonicalKey;
-      
-      // Canonical section
-      const canonicalSection = document.createElement('div');
-      canonicalSection.className = 'alias-canonical';
-      canonicalSection.innerHTML = `<div class="alias-canonical-label">Canonical</div>`;
-      
-      const canonicalPill = createTagPill(canonicalKey, effectiveCategory, canonicalName, {
-        onRemove: () => removeAliasGroup(canonicalKey),
-        onCategoryChange: (newCat) => changeAliasCanonicalCategory(canonicalKey, newCat),
-        onEdit: (newFullTag) => renameAliasCanonical(canonicalKey, newFullTag),
-        showEdit: true
-      });
-      canonicalSection.appendChild(canonicalPill);
-      card.appendChild(canonicalSection);
-
-      // Variants section
-      const variantsSection = document.createElement('div');
-      variantsSection.className = 'alias-variants';
-      variantsSection.innerHTML = `<div class="alias-variants-label">Variants (${(data.variants || []).length})</div>`;
-      
-      const variantsList = document.createElement('div');
-      variantsList.className = 'alias-variants-list';
-      
-      // Add variant input at the start of the list
-      const variantInputWrapper = document.createElement('div');
-      variantInputWrapper.className = 'autocomplete-wrapper variant-input-inline';
-      variantInputWrapper.innerHTML = `
-        <input type="text" id="add-var-${escapeAttr(canonicalKey)}" placeholder="Add variant...">
-        <div class="autocomplete-dropdown" id="add-var-dropdown-${escapeAttr(canonicalKey)}"></div>
-      `;
-      variantsList.appendChild(variantInputWrapper);
-      
-      (data.variants || []).forEach(v => {
-        const { category: vCat, name: vName } = parseTag(v);
-        const pill = createTagPill(v, vCat || 'general', vName, {
-          onRemove: () => removeVariant(canonicalKey, v),
-          onCategoryChange: (newCat) => changeVariantCategory(canonicalKey, v, newCat)
-        });
-        variantsList.appendChild(pill);
-      });
-      
-      variantsSection.appendChild(variantsList);
-      card.appendChild(variantsSection);
-
-      container.appendChild(card);
-
-      // Setup autocomplete for this card's variant input
-      const variantInputId = `add-var-${canonicalKey}`;
-      setupAutocomplete(
-        variantInputId, 
-        `add-var-dropdown-${canonicalKey}`,
-        (tag) => addVariantToAliasDirect(canonicalKey, tag)
-      );
-      
-      // Add Enter key handler for variant input
-      const variantInput = document.getElementById(variantInputId);
-      if (variantInput) {
-        variantInput.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter' && autocompleteSelectedIndex < 0) {
-            e.preventDefault();
-            addVariantToAlias(canonicalKey);
-          }
-        });
-      }
-    });
-    // Update pagination controls
-    updateAliasesPager(aliasEntries.length, totalPages);
+    return entries;
   }
 
-  function updateAliasesPager(totalCount, totalPages) {
-    const pager = document.getElementById('aliases-pager');
-    if (!pager) return;
-    
-    if (totalPages <= 1) {
-      pager.style.display = 'none';
+  function renderAliases(options = {}) {
+    const { resetScroll = false } = options;
+    const scrollContainer = document.querySelector('.aliases-container');
+    const savedScrollTop = (!resetScroll && scrollContainer) ? scrollContainer.scrollTop : 0;
+
+    const container = document.getElementById('aliases-list');
+    const emptyState = document.getElementById('aliases-empty');
+
+    container.innerHTML = '';
+    aliasesAllEntries = getFilteredAliasEntries();
+    aliasesRenderedCount = 0;
+
+    if (aliasesAllEntries.length === 0) {
+      emptyState.style.display = 'block';
+      if (scrollContainer) scrollContainer.scrollTop = 0;
       return;
     }
-    
-    pager.style.display = '';
-    const info = document.getElementById('aliases-page-info');
-    if (info) info.textContent = `Page ${aliasesCurrentPage + 1} of ${totalPages} (${totalCount} aliases)`;
-    
-    const prev = document.getElementById('aliases-prev-btn');
-    const next = document.getElementById('aliases-next-btn');
-    if (prev) prev.disabled = aliasesCurrentPage <= 0;
-    if (next) next.disabled = aliasesCurrentPage >= totalPages - 1;
+    emptyState.style.display = 'none';
+
+    // Always render at least one batch
+    appendNextAliasBatch();
+
+    if (!resetScroll && savedScrollTop > 0 && scrollContainer) {
+      // Keep appending until the saved scrollTop is reachable
+      while (
+        aliasesRenderedCount < aliasesAllEntries.length &&
+        scrollContainer.scrollHeight - scrollContainer.clientHeight < savedScrollTop
+      ) {
+        appendNextAliasBatch();
+      }
+      const maxScrollTop = Math.max(0, scrollContainer.scrollHeight - scrollContainer.clientHeight);
+      scrollContainer.scrollTop = Math.min(savedScrollTop, maxScrollTop);
+    } else if (scrollContainer) {
+      scrollContainer.scrollTop = 0;
+    }
+
+    attachAliasesScrollListener();
+  }
+
+  function appendNextAliasBatch() {
+    if (aliasesAppending) return;
+    if (aliasesRenderedCount >= aliasesAllEntries.length) return;
+    aliasesAppending = true;
+
+    const container = document.getElementById('aliases-list');
+    const slice = aliasesAllEntries.slice(
+      aliasesRenderedCount,
+      aliasesRenderedCount + ALIASES_BATCH_SIZE
+    );
+
+    slice.forEach(([canonicalKey, data]) => {
+      buildAliasCard(canonicalKey, data, container);
+    });
+
+    aliasesRenderedCount += slice.length;
+    aliasesAppending = false;
+  }
+
+  function buildAliasCard(canonicalKey, data, container) {
+    const { category: canonicalCat, name: canonicalName } = parseTag(canonicalKey);
+    const effectiveCategory = data.category || canonicalCat || 'general';
+
+    const card = document.createElement('div');
+    card.className = 'alias-card';
+    card.dataset.canonical = canonicalKey;
+
+    // Canonical section
+    const canonicalSection = document.createElement('div');
+    canonicalSection.className = 'alias-canonical';
+    canonicalSection.innerHTML = `<div class="alias-canonical-label">Canonical</div>`;
+
+    const canonicalPill = createTagPill(canonicalKey, effectiveCategory, canonicalName, {
+      onRemove: () => removeAliasGroup(canonicalKey),
+      onCategoryChange: (newCat) => changeAliasCanonicalCategory(canonicalKey, newCat),
+      onEdit: (newFullTag) => renameAliasCanonical(canonicalKey, newFullTag),
+      showEdit: true
+    });
+    canonicalSection.appendChild(canonicalPill);
+    card.appendChild(canonicalSection);
+
+    // Variants section
+    const variantsSection = document.createElement('div');
+    variantsSection.className = 'alias-variants';
+    variantsSection.innerHTML = `<div class="alias-variants-label">Variants (${(data.variants || []).length})</div>`;
+
+    const variantsList = document.createElement('div');
+    variantsList.className = 'alias-variants-list';
+
+    const variantInputWrapper = document.createElement('div');
+    variantInputWrapper.className = 'autocomplete-wrapper variant-input-inline';
+    variantInputWrapper.innerHTML = `
+      <input type="text" id="add-var-${escapeAttr(canonicalKey)}" placeholder="Add variant...">
+      <div class="autocomplete-dropdown" id="add-var-dropdown-${escapeAttr(canonicalKey)}"></div>
+    `;
+    variantsList.appendChild(variantInputWrapper);
+
+    (data.variants || []).forEach(v => {
+      const { category: vCat, name: vName } = parseTag(v);
+      const pill = createTagPill(v, vCat || 'general', vName, {
+        onRemove: () => removeVariant(canonicalKey, v),
+        onCategoryChange: (newCat) => changeVariantCategory(canonicalKey, v, newCat)
+      });
+      variantsList.appendChild(pill);
+    });
+
+    variantsSection.appendChild(variantsList);
+    card.appendChild(variantsSection);
+
+    container.appendChild(card);
+
+    // Wire autocomplete after the elements are in the DOM
+    const variantInputId = `add-var-${canonicalKey}`;
+    setupAutocomplete(
+      variantInputId,
+      `add-var-dropdown-${canonicalKey}`,
+      (tag) => addVariantToAliasDirect(canonicalKey, tag)
+    );
+
+    const variantInput = document.getElementById(variantInputId);
+    if (variantInput) {
+      variantInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && autocompleteSelectedIndex < 0) {
+          e.preventDefault();
+          addVariantToAlias(canonicalKey);
+        }
+      });
+    }
+  }
+
+  function attachAliasesScrollListener() {
+    const container = document.querySelector('.aliases-container');
+    if (!container || container.dataset.aliasesScrollAttached === 'true') return;
+    container.dataset.aliasesScrollAttached = 'true';
+    container.addEventListener('scroll', () => {
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      if (scrollTop + clientHeight >= scrollHeight - 300) {
+        appendNextAliasBatch();
+      }
+    });
   }
 
   function filterAliases() {
@@ -1321,7 +1523,7 @@ function renderImages(newImages) {
     };
 
     saveAliases();
-    renderAliases();
+    renderAliases({ resetScroll: true });
     document.getElementById('add-alias-input').value = '';
   }
 
@@ -2417,5 +2619,3 @@ window.refreshCurrentImage   = refreshCurrentImage;
 window.rescanCurrentImage    = rescanCurrentImage;
 window.setupHierarchyDelegation = setupHierarchyDelegation;
 window.setupSuggestionsDelegation = setupSuggestionsDelegation;
-window.aliasesNextPage = () => { aliasesCurrentPage++; renderAliases(); };
-window.aliasesPrevPage = () => { if (aliasesCurrentPage > 0) { aliasesCurrentPage--; renderAliases(); } };

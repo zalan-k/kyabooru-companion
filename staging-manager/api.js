@@ -52,7 +52,6 @@ async function checkConnection() {
         connectionStatus.error = null;
         
         statusEl.className = 'status-indicator connected';
-        showConnectionAlert('Connected to server', 'success');
         
         return true;
       } else {
@@ -200,13 +199,14 @@ async function saveHierarchy() {
 }
 
 async function runAnalyzer() {
-  showSpinner('Analyzing tags...');
   try {
-    const res = await fetch(`${API_BASE}/api/config/suggestions/analyze`, { method: 'POST' });
-    const result = await res.json();
-    if (!res.ok) throw new Error(result.error || `HTTP ${res.status}`);
+    const result = await withDeferredSpinner('Analyzing tags...', async () => {
+      const res = await fetch(`${API_BASE}/api/config/suggestions/analyze`, { method: 'POST' });
+      const r = await res.json();
+      if (!res.ok) throw new Error(r.error || `HTTP ${res.status}`);
+      return r;
+    });
 
-    hideSpinner();
     showToast(
       `Analyzed: ${result.aliasGroups} alias groups, ` +
       `${result.blacklistCandidates} blacklist candidates`
@@ -217,7 +217,6 @@ async function runAnalyzer() {
     await renderSuggestions();
     updateAllCounts();
   } catch (err) {
-    hideSpinner();
     showToast(`Analyze failed: ${err.message}`, 'error');
   }
 }
@@ -691,8 +690,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- Filter inputs ---
   document.getElementById('aliases-filter')?.addEventListener('input', () => {
-    aliasesCurrentPage = 0;
-    renderAliases();
+    renderAliases({ resetScroll: true });
   });
 
   wire('upload-filter-container', () => {
@@ -735,9 +733,6 @@ document.addEventListener('DOMContentLoaded', () => {
   wire('alias-suggestions-next-btn',        () => loadAliasSuggestions(aliasSuggestionsPage + 1));
   wire('garbage-suggestions-prev-btn',      () => loadGarbageSuggestions(garbageSuggestionsPage - 1));
   wire('garbage-suggestions-next-btn',      () => loadGarbageSuggestions(garbageSuggestionsPage + 1));
-
-  wire('aliases-prev-btn', () => window.aliasesPrevPage());
-  wire('aliases-next-btn', () => window.aliasesNextPage());
 
   setupHierarchyDelegation();
   setupSuggestionsDelegation();

@@ -1555,10 +1555,6 @@ body:has(.app-container) {
   position: relative;
 }
 
-.toolbar-glass.filter-active {
-  outline: 1px solid var(--color-accent, #818cf8);
-}
-
 .toolbar-glass .autocomplete-dropdown {
   position: absolute;
   top: 100%;
@@ -1643,6 +1639,90 @@ body:has(.app-container) {
 .toolbar-glass input::placeholder {
   color: var(--text-secondary);
   opacity: 1;
+}
+
+/* ============================================
+   FROSTING TOGGLE (inside upload filter dropdown)
+   ============================================ */
+.dropdown-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: left;
+}
+
+.dropdown-toggle-row:hover {
+  background: color-mix(in srgb, var(--primary) 15%, transparent);
+  color: var(--text-primary);
+}
+
+.dropdown-toggle-row svg {
+  width: 16px;
+  height: 16px;
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+.frosting-toggle-row-label {
+  flex: 1;
+}
+
+.frosting-toggle-pill {
+  position: relative;
+  width: 32px;
+  height: 18px;
+  border-radius: 9px;
+  background: var(--border-strong);
+  transition: background 0.2s ease;
+  flex-shrink: 0;
+}
+
+.frosting-toggle-pill-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--bg-card);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.2s ease;
+}
+
+.dropdown-toggle-row[data-state="on"] .frosting-toggle-pill {
+  background: var(--primary);
+}
+
+.dropdown-toggle-row[data-state="on"] .frosting-toggle-pill-thumb {
+  transform: translateX(14px);
+  box-shadow: 0 0 6px var(--primary-glow), 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+/* ============================================
+   FROSTING DISABLED (toggle off — hides uploaded state)
+   ============================================ */
+body.frosting-disabled .image-card.uploaded img {
+  filter: none;
+  transform: none;
+}
+
+body.frosting-disabled .image-card.uploaded::before {
+  display: none;
+}
+
+body.frosting-disabled .booru-frost-icon-link {
+  display: none;
 }
 
 .sort-dropdown-floating {
@@ -1823,14 +1903,28 @@ body:has(.app-container) {
 }
 
 .image-card.selected {
-  border-color: var(--primary);
-  border-width: 3px;
-  box-shadow:
-    0 0 0 2px var(--bg-card),                              /* gap ring */
-    0 0 0 5px var(--primary),                              /* primary ring */
-    0 0 16px 2px color-mix(in srgb, var(--primary) 60%, transparent),
-    var(--shadow-lg);
-  transform: translateY(-2px);
+  /* "Brighter than card" frame: white wash layered over the card bg.
+     Subtle in light mode, prominent in dark — matches Immich's behavior. */
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.2)),
+    var(--bg-card);
+}
+
+.image-card.selected img {
+  transform: scale(0.9);
+  /* Override .uploaded blur+scale-up if both classes are present */
+  filter: none;
+}
+
+/* Hide the .uploaded white tint when an uploaded card is selected,
+   so the selection wash isn't fighting another overlay. */
+.image-card.selected::before {
+  display: none;
+}
+
+/* Smooth in/out for the shrink */
+.image-card img {
+  transition: transform 0.2s ease, filter 0.2s ease;
 }
 
 .image-card.selected:hover {
@@ -1938,6 +2032,15 @@ body:has(.app-container) {
   transition: color 0.15s ease;
 }
 
+.booru-frost-icon-link.no-link {
+  cursor: default;
+}
+
+.booru-frost-icon-link.no-link:hover .booru-frost-icon {
+  /* skip the scale-up on hover since the icon isn't actionable */
+  transform: none;
+}
+
 .booru-frost-icon {
   width: 40px;            /* 56 * 0.7 ≈ 40 */
   height: 40px;
@@ -1972,6 +2075,7 @@ body:has(.app-container) {
   flex-direction: column;
   flex-shrink: 0;
   overflow: hidden;
+  margin-top: 20px;
 }
 
 .image-sidebar.hidden {
@@ -2163,8 +2267,13 @@ body:has(.app-container) {
 }
 
 .aliases-split-aside {
-  flex: 0 0 360px;       /* fixed-ish width on the right */
-  margin-top: 0;         /* override the .suggestions-section margin-top */
+  flex: 0 0 360px;
+  margin-top: 0px;     /* pull up to align with image sidebar */
+  position: sticky;
+  top: 0px;
+  align-self: flex-start;
+  max-height: calc(100vh - 200px);
+  overflow-y: auto;
 }
 
 /* Stack on narrow viewports */
@@ -2174,6 +2283,9 @@ body:has(.app-container) {
   }
   .aliases-split-aside {
     flex: 1 1 auto;
+    position: static;
+    max-height: none;
+    overflow-y: visible;
   }
 }
 
@@ -2198,7 +2310,7 @@ body:has(.app-container) {
    SUGGESTIONS PANEL
    ============================================ */
 .suggestions-section {
-  margin-top: 24px;
+  margin-top: -48px;
   padding: 16px;
   border: 1px solid rgba(234, 179, 8, 0.35);
   border-radius: 12px;
@@ -2291,9 +2403,21 @@ body:has(.app-container) {
   overflow: hidden;
 }
 
-.exclusion-filter {
+.exclusion-toolbar {
+  display: flex;
+  gap: 10px;
   margin-bottom: 12px;
   flex-shrink: 0;
+}
+
+.exclusion-toolbar .toolbar-glass {
+  flex: 1;
+  margin: 0;
+  min-width: 0;
+}
+
+.exclusion-toolbar .toolbar-glass input[type="text"] {
+  width: 100%;
 }
 
 .exclusion-items {
@@ -2301,16 +2425,6 @@ body:has(.app-container) {
   gap: 4px;
   flex-wrap: wrap;
   overflow-y: auto;
-  margin-bottom: 12px;
-}
-
-.add-exclusion-row {
-  margin-top: 12px;
-  flex-shrink: 0;
-}
-
-.add-exclusion-input {
-  flex: 1;
 }
 
 /* ============================================
